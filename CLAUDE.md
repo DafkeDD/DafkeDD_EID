@@ -31,7 +31,10 @@ Maak nooit zelf tags of releases met de hand; dat doet de workflow.
   (exports ↔ tsup-entries, geen Node-API's in core/react/mock, koffi alleen in /node, README's).
 - Een bugfix begint met een test die de bug aantoont.
 - `it.fails(...)` met "BEKENDE BUG" in de naam = gedocumenteerde, nog niet opgeloste bug.
-- Hardware-tests (echte lezer) staan achter `EID_PCSC_INTEGRATION=1` en draaien niet in CI.
+- Hardware-tests (echte lezer) staan in `tests/integration/*.int.ts` en draaien alleen met
+  `npm run test:integration` (niet in CI). Toon daar nooit ongemaskeerde persoonsgegevens.
+- `tests/node/native-ffi.test.ts` test de koffi-koppeling tegen een nep-PC/SC-bibliotheek
+  (`tests/fixtures/fake-pcsc.c`, Linux- én macOS-ABI); draait op Linux met gcc.
 
 ## Vóór elke push
 
@@ -49,7 +52,8 @@ de vereiste check voor `main`.
 - `packages/eid` — het pakket `@dafkedd/eid` (subpaden: `.`, `/node`, `/react`, `/server`, `/nestjs`, `/mock`).
   Nieuw subpad = entry in `tsup.config.ts` **én** in `exports` van package.json.
 - `src/core`, `src/react`, `src/mock` draaien ook in de browser: geen `node:`-imports, geen `Buffer`, geen `process`.
-- `koffi` (PC/SC) wordt alleen in `src/node` geïmporteerd.
+- `koffi` (PC/SC) wordt alleen in `src/node` geïmporteerd, en daar lazy (`createNativeBackend`), zodat de
+  mock-backend werkt zonder native bibliotheek. Alle ABI-verschillen per platform zitten in `src/node/pcsc/native.ts`.
 - React en NestJS zijn optionele peer-dependencies, nooit gewone dependencies.
 - Fouten altijd als `EidError` met een code uit `EID_ERROR_CODES`. Codes alleen toevoegen, nooit hernoemen.
 - Nooit persoonsgegevens of PIN loggen, ook niet in debug-uitvoer.

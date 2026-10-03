@@ -2,7 +2,7 @@
 
 Belgische eID-kaarten uitlezen in gehoste Next.js/React-apps, met optioneel aanmelden met PIN en een NestJS-module voor de backend. Werkt op Windows en macOS.
 
-> Status: fase 2. Uitlezen werkt met de virtuele kaart (`@dafkedd/eid/mock`); een echte lezer volgt in fase 3. Zie [docs/plan.md](docs/plan.md).
+> Status: fase 3. Uitlezen werkt met een echte kaartlezer (Windows, macOS, Linux) en met de virtuele kaart (`@dafkedd/eid/mock`). De bridge voor webapps volgt in fase 4. Zie [docs/plan.md](docs/plan.md).
 
 ## Hoe het werkt
 
@@ -39,6 +39,16 @@ npm install
 npm run typecheck
 npm test
 npm run build
+```
+
+## Testen met een echte kaartlezer
+
+```bash
+npm run test:integration          # leest de ingestoken eID (persoonsgegevens gemaskeerd)
+npm run build
+npx dafke-eid readers             # toon de kaartlezers
+npx dafke-eid read                # lees de kaart (gemaskeerd; --full toont alles)
+npx dafke-eid read --mock         # virtuele lezer met voorbeeldkaart
 ```
 
 ## Releases

@@ -13,28 +13,64 @@
   },
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./node": {
-      "import": { "types": "./dist/node.d.ts", "default": "./dist/node.js" },
-      "require": { "types": "./dist/node.d.cts", "default": "./dist/node.cjs" }
+      "import": {
+        "types": "./dist/node.d.ts",
+        "default": "./dist/node.js"
+      },
+      "require": {
+        "types": "./dist/node.d.cts",
+        "default": "./dist/node.cjs"
+      }
     },
     "./react": {
-      "import": { "types": "./dist/react.d.ts", "default": "./dist/react.js" },
-      "require": { "types": "./dist/react.d.cts", "default": "./dist/react.cjs" }
+      "import": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "require": {
+        "types": "./dist/react.d.cts",
+        "default": "./dist/react.cjs"
+      }
     },
     "./server": {
-      "import": { "types": "./dist/server.d.ts", "default": "./dist/server.js" },
-      "require": { "types": "./dist/server.d.cts", "default": "./dist/server.cjs" }
+      "import": {
+        "types": "./dist/server.d.ts",
+        "default": "./dist/server.js"
+      },
+      "require": {
+        "types": "./dist/server.d.cts",
+        "default": "./dist/server.cjs"
+      }
     },
     "./nestjs": {
-      "import": { "types": "./dist/nestjs.d.ts", "default": "./dist/nestjs.js" },
-      "require": { "types": "./dist/nestjs.d.cts", "default": "./dist/nestjs.cjs" }
+      "import": {
+        "types": "./dist/nestjs.d.ts",
+        "default": "./dist/nestjs.js"
+      },
+      "require": {
+        "types": "./dist/nestjs.d.cts",
+        "default": "./dist/nestjs.cjs"
+      }
     },
     "./mock": {
-      "import": { "types": "./dist/mock.d.ts", "default": "./dist/mock.js" },
-      "require": { "types": "./dist/mock.d.cts", "default": "./dist/mock.cjs" }
+      "import": {
+        "types": "./dist/mock.d.ts",
+        "default": "./dist/mock.js"
+      },
+      "require": {
+        "types": "./dist/mock.d.cts",
+        "default": "./dist/mock.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -57,7 +93,14 @@
     "react": ">=18"
   },
   "peerDependenciesMeta": {
-    "@nestjs/common": { "optional": true },
-    "react": { "optional": true }
+    "@nestjs/common": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "koffi": "^3.3.2"
   }
 }

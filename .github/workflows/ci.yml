@@ -41,6 +41,18 @@ jobs:
       - name: CLI uit de build starten
         run: node packages/eid/dist/cli.js --version
 
+      - name: pcsc-lite installeren (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libpcsclite1
+
+      # Laadt koffi en de echte PC/SC-bibliotheek van het platform (winscard.dll, PCSC.framework,
+      # libpcsclite). Er is geen lezer op de runner, maar zo weten we dat alle functies gevonden worden.
+      - name: PC/SC laden zonder lezer
+        run: node packages/eid/dist/cli.js readers
+
+      - name: Virtuele lezer uitlezen via de CLI
+        run: node packages/eid/dist/cli.js read --mock
+
   # Eén vaste naam voor de ruleset op main ("CI-check"), ongeacht de matrix.
   ci-check:
     name: CI-check
