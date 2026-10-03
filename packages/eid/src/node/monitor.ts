@@ -2,7 +2,7 @@
  * Volgt lezers en kaarten: een lus met listReaders + getStatusChange (time-out standaard 1 s).
  * Geen Plug-and-Play-notificatie nodig: nieuwe lezers worden bij de volgende ronde opgemerkt.
  */
-import { toHex } from "../core";
+import { toHex, type ReaderInfo } from "../core";
 import type { PcscBackend } from "./pcsc/backend";
 import { SCARD_STATE } from "./pcsc/constants";
 import { isPcscError } from "./pcsc/errors";
@@ -13,12 +13,7 @@ export type ReaderEvent =
   | { type: "card-inserted"; reader: string; atr: Uint8Array }
   | { type: "card-removed"; reader: string };
 
-export interface ReaderInfo {
-  name: string;
-  cardPresent: boolean;
-  /** ATR van de kaart (hex), als er een kaart in zit. */
-  atr?: string;
-}
+export type { ReaderInfo };
 
 export interface ReaderMonitorOptions {
   /** Time-out per getStatusChange-ronde. Standaard 1000 ms. */

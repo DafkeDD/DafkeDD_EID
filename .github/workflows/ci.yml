@@ -53,6 +53,12 @@ jobs:
       - name: Virtuele lezer uitlezen via de CLI
         run: node packages/eid/dist/cli.js read --mock
 
+      - name: Playground bouwen (Next.js)
+        if: runner.os == 'Linux'
+        run: npm run build -w @dafkedd/eid-playground
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
   # Eén vaste naam voor de ruleset op main ("CI-check"), ongeacht de matrix.
   ci-check:
     name: CI-check

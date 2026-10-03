@@ -49,6 +49,7 @@ de vereiste check voor `main`.
 
 ## Projectstructuur & conventies
 
+- `apps/playground` — Next.js-testpagina (`npm run playground`, zonder bridge: `/?mock=1`).
 - `packages/eid` — het pakket `@dafkedd/eid` (subpaden: `.`, `/node`, `/react`, `/server`, `/nestjs`, `/mock`).
   Nieuw subpad = entry in `tsup.config.ts` **én** in `exports` van package.json.
 - `src/core`, `src/react`, `src/mock` draaien ook in de browser: geen `node:`-imports, geen `Buffer`, geen `process`.
@@ -57,6 +58,9 @@ de vereiste check voor `main`.
 - React en NestJS zijn optionele peer-dependencies, nooit gewone dependencies.
 - Fouten altijd als `EidError` met een code uit `EID_ERROR_CODES`. Codes alleen toevoegen, nooit hernoemen.
 - Nooit persoonsgegevens of PIN loggen, ook niet in debug-uitvoer.
+- Wijzigingen aan de bridge (`src/node/bridge.ts`): eerst [docs/beveiliging.md](docs/beveiliging.md) lezen;
+  elke beveiligingsregel heeft een test in `tests/node/bridge.test.ts`.
+- Het bridge-protocol staat in `src/core/protocol.ts` (`PROTOCOL_VERSION`). Een brekende wijziging = versie omhoog.
 - Zichtbare UI hoort niet in deze repo maar in de DafkeDD UI-registry (`DafkeDD/DafkeDD_UI`).
 - Regeleindes: LF (zie `.gitattributes`). Code-commentaar en docs: Nederlands.
 - README in twee talen: `README.md` (Engels) en `README.nl.md` (Nederlands), met dezelfde hoofdstukken.

@@ -12,9 +12,11 @@ describe("dafke-eid CLI", () => {
     expect((await runCli(["-v"])).stdout).toBe(`${version}\n`);
   });
 
-  it("--help en zonder argumenten tonen de hulp", async () => {
-    expect((await runCli(["--help"])).stdout).toContain("dafke-eid");
-    expect((await runCli([])).code).toBe(0);
+  it("--help toont de hulp", async () => {
+    const { code, stdout } = await runCli(["--help"]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("serve");
+    expect(stdout).toContain("--origin");
   });
 
   it("onbekende optie of commando geeft exitcode 1", async () => {
@@ -118,3 +120,48 @@ describe("dafke-eid diag", () => {
 function never(): never {
   throw new Error("niet gebruikt");
 }
+
+describe("dafke-eid serve", () => {
+  const mockDeps = { createReader: async () => createEidReader({ backend: new MockPcscBackend().addReader("L") }) };
+
+  it("start de bridge, ook zonder commando, en stopt netjes", async () => {
+    for (const argv of [["serve", "--port", "0"], ["--port", "0"]]) {
+      const result = await runCli(argv, mockDeps, {});
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/luistert op http:\/\/127\.0\.0\.1:\d+/);
+      expect(result.stdout).toContain("Toegelaten websites: http://localhost:*, http://127.0.0.1:*");
+      const port = result.server!.bridge.port;
+      const res = await fetch(`http://127.0.0.1:${port}/v1/status`);
+      expect((await res.json()).name).toBe("dafke-eid");
+      await result.server!.stop();
+    }
+  });
+
+  it("neemt --origin (meermaals en met komma's) en --token over", async () => {
+    const result = await runCli(
+      ["serve", "--port", "0", "--origin", "https://a.voorbeeld.be,https://b.voorbeeld.be", "--origin", "https://*.c.be", "--token", "x"],
+      mockDeps,
+      {},
+    );
+    expect(result.server!.bridge.origins).toEqual(["https://a.voorbeeld.be", "https://b.voorbeeld.be", "https://*.c.be"]);
+    expect(result.stdout).toContain("Token: vereist");
+    const res = await fetch(`http://127.0.0.1:${result.server!.bridge.port}/v1/status`);
+    expect(res.status).toBe(401);
+    await result.server!.stop();
+  });
+
+  it("leest instellingen uit omgevingsvariabelen", async () => {
+    const result = await runCli(["serve"], mockDeps, { DAFKE_EID_PORT: "0", DAFKE_EID_ORIGINS: "https://env.voorbeeld.be", DAFKE_EID_TOKEN: "t" });
+    expect(result.server!.bridge.origins).toEqual(["https://env.voorbeeld.be"]);
+    expect(result.stdout).toContain("Token: vereist");
+    await result.server!.stop();
+  });
+
+  it("weigert een ongeldige poort of origin", async () => {
+    expect((await runCli(["serve", "--port", "99999"], mockDeps, {})).stderr).toContain("--port verwacht");
+    expect((await runCli(["serve"], mockDeps, { DAFKE_EID_PORT: "abc" })).stderr).toContain("DAFKE_EID_PORT");
+    const bad = await runCli(["serve", "--port", "0", "--origin", "*"], mockDeps, {});
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toContain("Ongeldig origin-patroon");
+  });
+});

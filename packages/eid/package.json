@@ -86,7 +86,7 @@
     "directory": "packages/eid"
   },
   "scripts": {
-    "build": "tsup"
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsup"
   },
   "peerDependencies": {
     "@nestjs/common": ">=10",

@@ -2,7 +2,7 @@
 
 Read Belgian eID cards in hosted Next.js/React apps, with optional PIN authentication and a NestJS module for the backend. Works on Windows and macOS.
 
-> Status: phase 3. Reading works with a real card reader (Windows, macOS, Linux) and with the virtual card (`@dafkedd/eid/mock`). The bridge for web apps follows in phase 4. See [docs/plan.md](docs/plan.md).
+> Status: phase 4. The bridge (`dafke-eid`) serves the card to allowed web apps, and `@dafkedd/eid/react` reads it live. The installable program for end users follows in phase 5. See [docs/plan.md](docs/plan.md).
 
 ## How it works
 
@@ -50,6 +50,17 @@ npx dafke-eid readers             # list readers
 npx dafke-eid read                # read the card (masked; --full shows everything)
 npx dafke-eid read --mock         # virtual reader with a sample card
 ```
+
+## Web app (React / Next.js)
+
+```bash
+npm run build
+npm run bridge            # or: npm run bridge:mock (virtual reader)
+npm run playground        # http://localhost:3000  (without bridge: /?mock=1)
+```
+
+See [docs/bridge.md](docs/bridge.md) for the protocol and React usage, and
+[docs/beveiliging.md](docs/beveiliging.md) for security (both Dutch).
 
 ## Releases
 

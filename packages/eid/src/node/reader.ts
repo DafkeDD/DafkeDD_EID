@@ -59,8 +59,11 @@ export class EidReader {
     for (const listener of this.#listeners) listener(event);
   }
 
-  /** Kiest de lezer: de gevraagde, of de eerste met een kaart. */
-  #pickReader(name?: string): string {
+  /**
+   * Kiest de lezer: de gevraagde, of de eerste met een kaart.
+   * @throws EidError `no-reader` of `no-card`
+   */
+  resolveReader(name?: string): string {
     const readers = this.readers();
     if (readers.length === 0) throw new EidError("no-reader", "Geen kaartlezer gevonden");
     if (name !== undefined) {
@@ -80,7 +83,7 @@ export class EidReader {
    */
   async withCard<T>(reader: string | undefined, operation: (card: PcscCard, signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (this.#closed) throw new EidError("internal", "EidReader is gesloten");
-    const name = this.#pickReader(reader);
+    const name = this.resolveReader(reader);
 
     const previous = this.#queues.get(name) ?? Promise.resolve();
     const run = previous.catch(() => {}).then(() => this.#exclusive(name, operation, signal));

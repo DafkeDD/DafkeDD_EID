@@ -35,8 +35,9 @@ describe("pakketstructuur", () => {
     for (const source of Object.values(entries)) expect(existsSync(join("packages/eid", source))).toBe(true);
   });
 
-  it("houdt de versies van root en pakket gelijk", () => {
+  it("houdt de versies van root, pakket en playground gelijk", () => {
     expect(pkg.version).toBe(root.version);
+    expect(JSON.parse(readFileSync("apps/playground/package.json", "utf8")).version).toBe(root.version);
   });
 
   it("gebruikt geen Node-API's in core, react en mock (die draaien ook in de browser)", () => {
@@ -48,6 +49,16 @@ describe("pakketstructuur", () => {
       expect(source, file).not.toMatch(/\bBuffer\b/);
       expect(source, file).not.toMatch(/\bprocess\./);
     }
+  });
+
+  it("laat core, react en mock nooit /node importeren", () => {
+    const browserSafe = ["core", "react", "mock"].flatMap((dir) => walk(join("packages/eid/src", dir)));
+    for (const file of browserSafe) expect(readFileSync(file, "utf8"), file).not.toMatch(/from\s+["']\.\.\/node/);
+  });
+
+  it("zet \"use client\" bovenaan de React-build", () => {
+    const config = readFileSync("packages/eid/tsup.config.ts", "utf8");
+    expect(config).toContain(`banner: { js: '"use client";' }`);
   });
 
   it("importeert koffi alleen in /node", () => {

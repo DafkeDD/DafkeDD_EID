@@ -2,13 +2,14 @@
  * `dafke-eid` — commando's rond de kaartlezer.
  * Fase 3: `readers` en `read` (handig om een lezer te testen). De bridge-server komt in fase 4.
  */
-import { EidError, formatPartialDate, checkNationalNumber, type EidCardData } from "../core";
+import { EidError, formatPartialDate, checkNationalNumber, DEFAULT_BRIDGE_PORT, DEFAULT_ORIGINS, type EidCardData } from "../core";
 import { createSampleCard } from "../mock";
 import { VERSION } from "../version";
 import { createEidReader, type EidReader } from "./reader";
 import { MockPcscBackend } from "./pcsc/mock";
 import { createNativeBackend } from "./pcsc/native";
 import { diagnose } from "./diagnose";
+import { startBridge, type Bridge } from "./bridge";
 import type { PcscBackend } from "./pcsc/backend";
 
 export const HELP = `dafke-eid ${VERSION}
@@ -16,18 +17,28 @@ export const HELP = `dafke-eid ${VERSION}
 Lokale brug tussen je kaartlezer en toegelaten websites.
 
 Gebruik:
-  dafke-eid <commando> [opties]
+  dafke-eid [commando] [opties]
 
 Commando's:
+  serve                 Start de bridge (standaard, ook zonder commando)
   readers               Toon de kaartlezers en of er een kaart in zit
   read                  Lees de eID in (persoonsgegevens worden gemaskeerd)
   diag                  Toon de ruwe PC/SC-toestand (zonder persoonsgegevens)
 
-Opties:
+Opties voor serve:
+  --port <poort>        Poort op 127.0.0.1 (standaard ${DEFAULT_BRIDGE_PORT}, of DAFKE_EID_PORT)
+  --origin <patroon>    Toegelaten website, mag meermaals of met komma's
+                        (standaard ${DEFAULT_ORIGINS.join(", ")}, of DAFKE_EID_ORIGINS)
+                        Voorbeelden: https://app.voorbeeld.be, https://*.voorbeeld.be
+  --token <geheim>      Elke aanvraag moet dit token meesturen (of DAFKE_EID_TOKEN)
+
+Opties voor read:
   --reader <naam>       Gebruik deze kaartlezer (standaard: de eerste met een kaart)
   --full                Toon alle gegevens, niet gemaskeerd
   --json                Toon alle gegevens als JSON (foto in base64)
   --no-photo            Lees de foto niet
+
+Algemeen:
   --mock                Gebruik een virtuele lezer met voorbeeldkaart
   --debug               Toon technische fouten van de kaartlezer (PC/SC)
   -v, --version         Toon de versie
@@ -38,6 +49,8 @@ export interface CliResult {
   code: number;
   stdout: string;
   stderr: string;
+  /** Alleen bij `serve`: de draaiende bridge (stoppen met stop()). */
+  server?: { bridge: Bridge; stop(): Promise<void> };
 }
 
 export interface CliDeps {
@@ -72,12 +85,15 @@ interface ParsedArgs {
   photo: boolean;
   mock: boolean;
   debug: boolean;
+  port: number | undefined;
+  origins: string[];
+  token: string | undefined;
   version: boolean;
   help: boolean;
 }
 
 function parseArgs(argv: readonly string[]): ParsedArgs | string {
-  const args: ParsedArgs = { command: undefined, reader: undefined, full: false, json: false, photo: true, mock: false, debug: false, version: false, help: false };
+  const args: ParsedArgs = { command: undefined, reader: undefined, full: false, json: false, photo: true, mock: false, debug: false, port: undefined, origins: [], token: undefined, version: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     switch (arg) {
@@ -108,6 +124,25 @@ function parseArgs(argv: readonly string[]): ParsedArgs | string {
         const value = argv[++i];
         if (value === undefined || value.startsWith("--")) return "--reader verwacht een naam";
         args.reader = value;
+        break;
+      }
+      case "--port": {
+        const value = argv[++i];
+        const port = Number(value);
+        if (!value || !Number.isInteger(port) || port < 0 || port > 65535) return "--port verwacht een getal tussen 0 en 65535";
+        args.port = port;
+        break;
+      }
+      case "--origin": {
+        const value = argv[++i];
+        if (value === undefined || value.startsWith("--")) return "--origin verwacht een patroon";
+        args.origins.push(...value.split(",").map((o) => o.trim()).filter(Boolean));
+        break;
+      }
+      case "--token": {
+        const value = argv[++i];
+        if (value === undefined || value.startsWith("--")) return "--token verwacht een waarde";
+        args.token = value;
         break;
       }
       default:
@@ -175,11 +210,63 @@ function errorResult(error: unknown): CliResult {
   return { code: 2, stdout: "", stderr: `Onverwachte fout: ${error instanceof Error ? error.message : String(error)}\n` };
 }
 
-export async function runCli(argv: readonly string[], deps: CliDeps = defaultDeps): Promise<CliResult> {
+async function serve(args: ParsedArgs, deps: CliDeps, env: Record<string, string | undefined>): Promise<CliResult> {
+  const envPort = env.DAFKE_EID_PORT ? Number(env.DAFKE_EID_PORT) : undefined;
+  if (envPort !== undefined && (!Number.isInteger(envPort) || envPort < 0 || envPort > 65535)) {
+    return { code: 1, stdout: "", stderr: "DAFKE_EID_PORT is geen geldige poort\n" };
+  }
+  const port = args.port ?? envPort ?? DEFAULT_BRIDGE_PORT;
+  const envOrigins = (env.DAFKE_EID_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+  const origins = args.origins.length > 0 ? args.origins : envOrigins.length > 0 ? envOrigins : [...DEFAULT_ORIGINS];
+  const token = args.token ?? (env.DAFKE_EID_TOKEN || undefined);
+
+  let reader: EidReader | undefined;
+  try {
+    reader = await deps.createReader({ mock: args.mock, debug: args.debug });
+    const bridge = await startBridge({
+      reader,
+      port,
+      origins,
+      ...(token ? { token } : {}),
+      ...(args.debug ? { onRequest: (r) => process.stderr.write(`[debug] ${r.method} ${r.path} ${r.status} ${r.ms}ms\n`) } : {}),
+    });
+    const opened = reader;
+    const readers = opened.readers();
+    const stdout =
+      `dafke-eid ${VERSION} luistert op ${bridge.url}${args.mock ? " (virtuele lezer)" : ""}\n` +
+      `Toegelaten websites: ${origins.join(", ")}\n` +
+      (token ? "Token: vereist\n" : "") +
+      `Kaartlezers: ${readers.map((r) => r.name).join(", ") || "(nog geen)"}\n` +
+      "Stoppen met Ctrl+C.\n";
+    return {
+      code: 0,
+      stdout,
+      stderr: "",
+      server: {
+        bridge,
+        async stop() {
+          await bridge.close();
+          await opened.close();
+        },
+      },
+    };
+  } catch (error) {
+    await reader?.close();
+    return errorResult(error);
+  }
+}
+
+export async function runCli(
+  argv: readonly string[],
+  deps: CliDeps = defaultDeps,
+  env: Record<string, string | undefined> = process.env,
+): Promise<CliResult> {
   const args = parseArgs(argv);
   if (typeof args === "string") return { code: 1, stdout: "", stderr: `${args}\n\n${HELP}` };
   if (args.version) return { code: 0, stdout: `${VERSION}\n`, stderr: "" };
-  if (args.help || args.command === undefined) return { code: 0, stdout: HELP, stderr: "" };
+  if (args.help) return { code: 0, stdout: HELP, stderr: "" };
+
+  if (args.command === undefined || args.command === "serve") return serve(args, deps, env);
 
   if (args.command === "diag") {
     const create = deps.createBackend ?? defaultDeps.createBackend!;
@@ -231,5 +318,13 @@ if (isMain()) {
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);
     process.exitCode = result.code;
+    const server = result.server;
+    if (server) {
+      const shutdown = () => {
+        void server.stop().finally(() => process.exit(0));
+      };
+      process.once("SIGINT", shutdown);
+      process.once("SIGTERM", shutdown);
+    }
   });
 }

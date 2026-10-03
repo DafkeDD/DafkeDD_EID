@@ -7,7 +7,7 @@ const pkg = JSON.parse(readFileSync(new URL("./packages/eid/package.json", impor
 export default defineConfig({
   define: { __DAFKEDD_EID_VERSION__: JSON.stringify(pkg.version) },
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.{ts,tsx}"],
     environment: "node",
     restoreMocks: true,
   },

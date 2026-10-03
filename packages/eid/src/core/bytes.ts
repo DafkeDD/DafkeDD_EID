@@ -50,6 +50,28 @@ export function utf8Encode(text: string): Uint8Array {
   return encoder.encode(text);
 }
 
+/** Bytes → base64 (standaard alfabet, met opvulling). Gebruikt btoa: browser én Node. */
+export function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+/** Base64 → bytes. Gooit `invalid-data` bij ongeldige invoer. */
+export function fromBase64(text: string): Uint8Array {
+  let binary: string;
+  try {
+    binary = atob(text);
+  } catch (error) {
+    throw new EidError("invalid-data", "Ongeldige base64", { cause: error });
+  }
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
 export type DigestAlgorithm = "SHA-1" | "SHA-256" | "SHA-384" | "SHA-512";
 
 /** Hash via WebCrypto (`globalThis.crypto.subtle`), beschikbaar in browsers en Node ≥ 20. */

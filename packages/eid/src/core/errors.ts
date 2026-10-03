@@ -19,6 +19,8 @@ export const EID_ERROR_CODES = [
   "auth-not-allowed", // deze website mag geen PIN vragen
   "timeout", // operatie duurde te lang
   "aborted", // afgebroken via AbortSignal
+  "unauthorized", // token van de bridge ontbreekt of klopt niet
+  "not-found", // onbekend adres op de bridge
   "internal", // onverwachte fout
 ] as const;
 

@@ -44,5 +44,19 @@ export { parseCardData } from "./parsers/card-data";
 export { parseBirthDate, parseCardDate, formatPartialDate } from "./parsers/dates";
 export { checkNationalNumber, normalizeNationalNumber } from "./parsers/national-number";
 export type { NationalNumberInfo } from "./parsers/national-number";
-export { toHex, fromHex, concatBytes, equalBytes, utf8Decode, utf8Encode, digest } from "./bytes";
+export { toHex, fromHex, toBase64, fromBase64, concatBytes, equalBytes, utf8Decode, utf8Encode, digest } from "./bytes";
 export type { DigestAlgorithm } from "./bytes";
+
+export {
+  PROTOCOL_VERSION,
+  DEFAULT_BRIDGE_PORT,
+  DEFAULT_BRIDGE_URL,
+  DEFAULT_ORIGINS,
+  TOKEN_HEADER,
+  encodeCardData,
+  decodeCardData,
+  errorFromBody,
+  matchOrigin,
+  assertOriginPattern,
+} from "./protocol";
+export type { ReaderInfo, BridgeStatus, BridgeEvent, BridgeErrorBody, EidCardJson, CardResponse } from "./protocol";
