@@ -2,7 +2,7 @@
 
 Belgische eID-kaarten uitlezen in gehoste Next.js/React-apps, met optioneel aanmelden met PIN en een NestJS-module voor de backend. Werkt op Windows en macOS.
 
-> Status: fase 1 (repo opzetten). Er wordt nog geen kaart gelezen. Zie [docs/plan.md](docs/plan.md).
+> Status: fase 2. Uitlezen werkt met de virtuele kaart (`@dafkedd/eid/mock`); een echte lezer volgt in fase 3. Zie [docs/plan.md](docs/plan.md).
 
 ## Hoe het werkt
 
@@ -16,6 +16,19 @@ Een browser kan niet met een kaartlezer praten. Elke gebruiker draait daarom een
 | `@dafkedd/eid/server` | Node | token controleren |
 | `@dafkedd/eid/nestjs` | Node | NestJS-module |
 | `@dafkedd/eid/mock` | overal | virtuele kaart |
+
+## Een kaart uitlezen (virtuele kaart)
+
+```ts
+import { readEid } from "@dafkedd/eid";
+import { createSampleCard } from "@dafkedd/eid/mock";
+
+const card = await createSampleCard();
+const { identity, address, photo } = await readEid(card);
+console.log(identity.firstNames, identity.lastName, address.municipality);
+```
+
+Kaartformaat en ontwerpkeuzes: [docs/eid-kaart.md](docs/eid-kaart.md).
 
 ## Ontwikkelen
 

@@ -42,7 +42,8 @@ describe("pakketstructuur", () => {
   it("gebruikt geen Node-API's in core, react en mock (die draaien ook in de browser)", () => {
     const browserSafe = ["core", "react", "mock"].flatMap((dir) => walk(join("packages/eid/src", dir)));
     for (const file of browserSafe) {
-      const source = readFileSync(file, "utf8");
+      // Commentaar telt niet mee ("geen Buffer" in een uitleg is prima).
+      const source = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
       expect(source, file).not.toMatch(/from\s+["']node:/);
       expect(source, file).not.toMatch(/\bBuffer\b/);
       expect(source, file).not.toMatch(/\bprocess\./);

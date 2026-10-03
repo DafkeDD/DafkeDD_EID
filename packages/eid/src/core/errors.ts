@@ -18,6 +18,7 @@ export const EID_ERROR_CODES = [
   "pin-blocked", // PIN geblokkeerd
   "auth-not-allowed", // deze website mag geen PIN vragen
   "timeout", // operatie duurde te lang
+  "aborted", // afgebroken via AbortSignal
   "internal", // onverwachte fout
 ] as const;
 
