@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-bin
+coverage
+*.tsbuildinfo
+*.tgz
+.DS_Store
+.env*
+.tmp-tests

@@ -1,0 +1,56 @@
+# Controle op elke push naar developer en op elke pull request.
+# Draait op Windows, macOS en Linux: de kaartlezer-code (fase 3) verschilt per platform.
+name: CI
+
+on:
+  push:
+    branches: [developer]
+  pull_request:
+    branches: [developer, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+      - name: Unit-tests (Vitest)
+        run: npm test
+
+      - name: CLI uit de build starten
+        run: node packages/eid/dist/cli.js --version
+
+  # Eén vaste naam voor de ruleset op main ("CI-check"), ongeacht de matrix.
+  ci-check:
+    name: CI-check
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alle platformen groen?
+        run: |
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "::error::Een of meer platformen faalden."
+            exit 1
+          fi

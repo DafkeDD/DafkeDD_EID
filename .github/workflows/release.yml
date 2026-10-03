@@ -1,0 +1,66 @@
+# Maakt een GitHub-release zodra er naar main gemerged wordt.
+# Het versienummer komt uit package.json (root). Bestaat de tag vX.Y.Z al,
+# dan wordt er niets gereleased: verhoog eerst de versie op developer
+# met `npm run version:patch` (of :minor / :major).
+# Publiceren naar een npm-registry en de programma's voor Windows/macOS komen in latere fasen.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+      - name: Unit-tests (Vitest)
+        run: npm test
+
+      - name: Versie bepalen
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Tag v$VERSION bestaat al — geen release gemaakt. Verhoog de versie op developer met 'npm run version:patch' en merge opnieuw."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pakket inpakken
+        if: steps.version.outputs.exists == 'false'
+        run: (cd packages/eid && npm pack --pack-destination ../..)
+
+      - name: GitHub-release maken
+        if: steps.version.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=${{ steps.version.outputs.tag }}
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "DafkeDD EID $TAG" \
+            --generate-notes \
+            dafkedd-eid-*.tgz
