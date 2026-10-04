@@ -112,6 +112,15 @@ Dat controleert de handtekening over jouw origin en nonce, de keten tot Belgium 
 
 ## Programma voor gebruikers
 
+Downloadlinks (altijd de **nieuwste versie**, handig voor een downloadknop):
+
+| Platform | Link |
+| --- | --- |
+| Windows-setup (aanbevolen) | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-setup-windows-x64.exe |
+| Windows, los programma | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-windows-x64.exe |
+| macOS Apple Silicon | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-arm64 |
+| macOS Intel | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-x64 |
+
 Windows: download `dafke-eid-setup-windows-x64.exe` uit de GitHub-release en voer het uit (of het
 losse `dafke-eid-windows-x64.exe`, dat zichzelf installeert). Het installeert in het profiel van de
 gebruiker (geen administratorrechten), start mee met de computer en opent de **testpagina** op

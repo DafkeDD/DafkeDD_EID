@@ -4,6 +4,19 @@ Websites die je eID lezen, hebben een klein programma op je computer nodig: **Da
 Het praat met je kaartlezer en geeft je kaart alleen aan websites die daarvoor toegelaten zijn.
 Je hebt geen administratorrechten nodig.
 
+## Downloaden
+
+Deze links wijzen altijd naar de **nieuwste versie** (handig voor een downloadknop op je website):
+
+| Platform | Bestand | Link |
+| --- | --- | --- |
+| Windows (aanbevolen) | Setup | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-setup-windows-x64.exe |
+| Windows | Los programma (installeert zichzelf) | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-windows-x64.exe |
+| macOS Apple Silicon (M1/M2/M3/…) | Programma | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-arm64 |
+| macOS Intel | Programma | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-x64 |
+
+Alle versies, met `.sha256`-controlebestanden: https://github.com/DafkeDD/DafkeDD_EID/releases
+
 ## Windows
 
 1. Download **`dafke-eid-setup-windows-x64.exe`** (de setup).
