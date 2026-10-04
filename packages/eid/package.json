@@ -1,6 +1,6 @@
 {
   "name": "@dafkedd/eid",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Belgian eID for hosted web apps: card reading (core), local bridge (/node), React hooks (/react), token validation (/server, /nestjs) and a virtual card (/mock)",
   "license": "UNLICENSED",
   "type": "module",

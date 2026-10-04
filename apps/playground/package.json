@@ -1,6 +1,6 @@
 {
   "name": "@dafkedd/eid-playground",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Testpagina: leest de eID via de bridge (of een virtuele kaart)",
   "scripts": {
