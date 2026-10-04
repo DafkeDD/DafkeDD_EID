@@ -134,7 +134,8 @@ Nog te schrijven:
 - Fase 7: **code klaar** — `verifyEidToken`/`EidAuthenticator` (nonce, handtekening, keten met AIA, OCSP fail closed met eigen DER-encoder, getest tegen `openssl ocsp`), `MemoryNonceStore` + Redis-voorbeeld, `EidAuthModule` voor NestJS, end-to-end-test kaart → bridge → server.
 - Fase 7 **getest met een echte kaart** (applet 1.8, nieuwe PKI): PIN → ES384-token → keten tot Belgium Root CA6 → echte OCSP van de overheid. Roots CA3, CA4 en CA6 opgehaald met `npm run fetch-roots` (CA6-vingerafdruk gelijk aan de root op de kaart).
 - Nog open: onbekend identiteitsveld `0x1a` op nieuwe kaarten uitzoeken (blijft bewaard in `unknownFields`).
-- Volgende: fase 8 (DafkeDD UI-componenten).
+- Fase 8: **klaar** in de Dafke-UI-repo — `eid-status` (fases, downloadknoppen voor Windows/macOS, "bijwerken"), `eid-card` (gevoelige velden standaard afgeschermd, foto vervaagd), `eid-pin-dialog` (PIN wordt na versturen gewist, resterende pogingen, niet sluitbaar tijdens ondertekenen) en `eid-reader-picker`. Props-gestuurd: Dafke UI hangt niet van `@dafkedd/eid` af. Categorie "eID" in de docs-site, 19 tests.
+- Volgende: fase 9 (installatietest + "Aan de slag in 5 minuten").
 
 ## Fasen
 

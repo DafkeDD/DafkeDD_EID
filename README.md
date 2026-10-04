@@ -2,7 +2,7 @@
 
 Read Belgian eID cards in hosted Next.js/React apps, with optional PIN authentication and a NestJS module for the backend. Works on Windows and macOS.
 
-> Status: phase 7. Reading, the end-user program, PIN login and server-side validation (`/server`, `/nestjs`: signature, chain to Belgium Root CA, OCSP) all work. Next: the DafkeDD UI components (phase 8). See [docs/plan.md](docs/plan.md).
+> Status: phase 8. Reading, the end-user program, PIN login, server-side validation (`/server`, `/nestjs`: signature, chain to Belgium Root CA, OCSP) and the Dafke UI components all work. Next: install test in an empty project (phase 9). See [docs/plan.md](docs/plan.md).
 
 ## How it works
 
@@ -61,6 +61,23 @@ npm run playground        # http://localhost:3000  (without bridge: /?mock=1)
 
 See [docs/bridge.md](docs/bridge.md) for the protocol and React usage, and
 [docs/beveiliging.md](docs/beveiliging.md) for security (both Dutch).
+
+## Ready-made components (Dafke UI)
+
+[Dafke UI](https://github.com/DafkeDD/DafkeDD_UI) has four eID components: `eid-status`, `eid-card`,
+`eid-pin-dialog` and `eid-reader-picker` (`npx dafke-ui add eid-status eid-card`). They only take
+props, so you wire the hooks into them:
+
+```tsx
+const eid = useEid();
+<EidStatus phase={eid.phase} reader={eid.reader} error={eid.error} onRead={eid.read}
+  downloads={{ windows: "/downloads/dafke-eid-setup.exe", mac: "/downloads/dafke-eid-macos" }} />
+{eid.card && <EidCard identity={eid.card.identity} address={eid.card.address} photo={eid.card.photo} />}
+
+const auth = useEidLogin();
+<EidPinDialog open={open} onOpenChange={setOpen} onSubmit={(pin) => auth.login({ nonce, pin })}
+  status={auth.status} error={auth.error} triesLeft={auth.triesLeft} />
+```
 
 ## PIN login
 
