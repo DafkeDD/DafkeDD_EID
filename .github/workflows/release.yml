@@ -2,7 +2,15 @@
 # Het versienummer komt uit package.json (root). Bestaat de tag vX.Y.Z al,
 # dan wordt er niets gereleased: verhoog eerst de versie op developer
 # met `npm run version:patch` (of :minor / :major).
-# Publiceren naar een npm-registry en de programma's voor Windows/macOS komen in latere fasen.
+#
+# Bij de release horen het npm-pakket (.tgz) en het programma voor gebruikers:
+#   dafke-eid-windows-x64.exe, dafke-eid-macos-arm64, dafke-eid-macos-x64 (+ .sha256)
+#
+# Ondertekenen gebeurt alleen als de geheimen ingesteld zijn (zie docs/releasen.md):
+#   Windows: WINDOWS_CERT_PFX (base64), WINDOWS_CERT_PASSWORD
+#   macOS:   APPLE_CERT_P12 (base64), APPLE_CERT_PASSWORD, APPLE_SIGN_IDENTITY,
+#            APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD (notarisatie)
+# Toegelaten websites inbakken: repository-variabelen DAFKE_EID_ORIGINS en DAFKE_EID_AUTH_ORIGINS (komma's).
 name: Release
 
 on:
@@ -18,25 +26,15 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  version:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      exists: ${{ steps.version.outputs.exists }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run build
-
-      - name: Unit-tests (Vitest)
-        run: npm test
-
       - name: Versie bepalen
         id: version
         run: |
@@ -49,18 +47,113 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+  binaries:
+    needs: version
+    if: needs.version.outputs.exists == 'false'
+    name: programma (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          - os: macos-latest       # Apple Silicon (arm64)
+          - os: macos-15-intel     # Intel (x64)
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERT_PFX != '' }}
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Programma bouwen
+        run: |
+          ARGS=""
+          if [ -n "${{ vars.DAFKE_EID_ORIGINS }}" ]; then ARGS="--origin ${{ vars.DAFKE_EID_ORIGINS }}"; fi
+          if [ -n "${{ vars.DAFKE_EID_AUTH_ORIGINS }}" ]; then ARGS="$ARGS --auth-origin ${{ vars.DAFKE_EID_AUTH_ORIGINS }}"; fi
+          npm run build:exe -- $ARGS
+
+      - name: Ondertekenen (Windows)
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_CERT == 'true'
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String("${{ secrets.WINDOWS_CERT_PFX }}"))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match "x64" } | Select-Object -Last 1
+          $exe = Get-ChildItem dist-bin -Filter "*.exe" | Select-Object -First 1
+          & $signtool.FullName sign /f $pfx /p "${{ secrets.WINDOWS_CERT_PASSWORD }}" /fd sha256 /tr http://timestamp.digicert.com /td sha256 $exe.FullName
+          Remove-Item $pfx
+
+      - name: Ondertekenen en notariseren (macOS)
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/sign.keychain-db"
+          echo "${{ secrets.APPLE_CERT_P12 }}" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p ci "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p ci "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "${{ secrets.APPLE_CERT_PASSWORD }}" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          EXE=$(ls dist-bin/dafke-eid-macos-* | grep -v sha256)
+          codesign --force --options runtime --timestamp --entitlements scripts/macos-entitlements.plist \
+            --sign "${{ secrets.APPLE_SIGN_IDENTITY }}" "$EXE"
+          ditto -c -k --keepParent "$EXE" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "${{ secrets.APPLE_ID }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" --password "${{ secrets.APPLE_APP_PASSWORD }}" --wait
+
+      - name: Controleren en checksum
+        run: |
+          EXE=$(ls dist-bin/dafke-eid-* | grep -v sha256)
+          "$EXE" --version
+          "$EXE" read --mock > /dev/null
+          NAME=$(basename "$EXE")
+          (cd dist-bin && (sha256sum "$NAME" 2>/dev/null || shasum -a 256 "$NAME") > "$NAME.sha256")
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bin-${{ matrix.os }}
+          path: dist-bin/
+
+  release:
+    needs: [version, binaries]
+    if: needs.version.outputs.exists == 'false' && !cancelled() && needs.binaries.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Unit-tests (Vitest)
+        run: npm test
+
       - name: Pakket inpakken
-        if: steps.version.outputs.exists == 'false'
         run: (cd packages/eid && npm pack --pack-destination ../..)
 
+      - uses: actions/download-artifact@v8
+        with:
+          path: bin
+          pattern: bin-*
+          merge-multiple: true
+
       - name: GitHub-release maken
-        if: steps.version.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=${{ steps.version.outputs.tag }}
+          TAG=${{ needs.version.outputs.tag }}
+          ls -la bin
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
             --title "DafkeDD EID $TAG" \
             --generate-notes \
-            dafkedd-eid-*.tgz
+            dafkedd-eid-*.tgz bin/*

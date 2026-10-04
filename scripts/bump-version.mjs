@@ -7,7 +7,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 
-const files = ["package.json", "packages/eid/package.json"];
+const files = ["package.json", "packages/eid/package.json", "apps/playground/package.json"];
 const arg = process.argv[2];
 const root = JSON.parse(readFileSync("package.json", "utf8"));
 const [maj, min, pat] = root.version.split(".").map(Number);
@@ -31,7 +31,7 @@ for (const file of files) {
 // package-lock.json gericht bijwerken, zonder `npm install` (andere npm-versies herschrijven anders alles).
 const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
 lock.version = next;
-for (const key of ["", "packages/eid"]) {
+for (const key of ["", "packages/eid", "apps/playground"]) {
   if (lock.packages?.[key]) lock.packages[key].version = next;
 }
 writeFileSync("package-lock.json", JSON.stringify(lock, null, 2) + "\n");

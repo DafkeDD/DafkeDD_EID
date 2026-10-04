@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["**/*.ts", "../packages/eid/src/**/*.ts"]
+  "include": ["**/*.ts", "**/*.tsx", "../packages/eid/src/**/*.ts", "../packages/eid/src/**/*.tsx"]
 }

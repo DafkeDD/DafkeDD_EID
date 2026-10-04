@@ -7,3 +7,6 @@ coverage
 .DS_Store
 .env*
 .tmp-tests
+.next
+next-env.d.ts.bak
+build
