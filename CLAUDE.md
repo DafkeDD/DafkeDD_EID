@@ -5,6 +5,7 @@ Het volledige plan staat in [docs/plan.md](docs/plan.md).
 
 ## Git-regels (belangrijk)
 
+- **Nooit Claude vermelden** in commits, pull requests of bestanden: geen `Co-Authored-By`, geen `Claude-Session`, geen "Generated with Claude Code".
 - **Push altijd naar `developer`.** Nooit rechtstreeks naar `main` committen of pushen.
 - Controleer vóór elke commit/push op welke branch je staat: `git branch --show-current`.
   Sta je op `main`, schakel dan eerst over: `git switch developer`.
