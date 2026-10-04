@@ -2,7 +2,7 @@
  * Hoog niveau: lezers volgen en een eID uitlezen. Eén operatie per lezer tegelijk, in een
  * PC/SC-transactie, en automatisch afgebroken als de kaart eruit gaat.
  */
-import { EidError, readEid, type EidCardData, type EidReadOptions } from "../core";
+import { authenticate, EidError, readEid, type AuthenticateOptions, type CardRunner, type EidAuthToken, type EidCardData, type EidReadOptions } from "../core";
 import { ReaderMonitor, type ReaderEvent, type ReaderInfo } from "./monitor";
 import type { PcscBackend, PcscCard } from "./pcsc/backend";
 import { createNativeBackend } from "./pcsc/native";
@@ -130,6 +130,16 @@ export class EidReader {
   /** Leest de eID in `reader` (of de eerste lezer met een kaart). Geen PIN nodig. */
   read(reader?: string, options: EidReadOptions = {}): Promise<EidCardData> {
     return this.withCard(reader, (card, signal) => readEid(card, { ...options, signal }), options.signal);
+  }
+
+  /**
+   * Aanmelden met PIN op de kaart in `reader` (of de eerste lezer met een kaart). Elke kaartstap is
+   * een aparte transactie; de PIN wordt tussen de stappen gevraagd (zie core/auth.ts).
+   */
+  authenticate(reader: string | undefined, options: AuthenticateOptions): Promise<EidAuthToken> {
+    const name = this.resolveReader(reader);
+    const run: CardRunner = (step) => this.withCard(name, (card) => step(card), options.signal);
+    return authenticate(run, options);
   }
 
   async close(): Promise<void> {

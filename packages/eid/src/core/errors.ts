@@ -21,6 +21,8 @@ export const EID_ERROR_CODES = [
   "aborted", // afgebroken via AbortSignal
   "unauthorized", // token van de bridge ontbreekt of klopt niet
   "not-found", // onbekend adres op de bridge
+  "bad-request", // ongeldige aanvraag (bv. nonce, origin of PIN-formaat)
+  "unsupported-card", // kaart te oud voor deze functie (bv. aanmelden met applet 1.1)
   "internal", // onverwachte fout
 ] as const;
 

@@ -165,3 +165,105 @@ describe("dafke-eid serve", () => {
     expect(bad.stderr).toContain("Ongeldig origin-patroon");
   });
 });
+
+describe("dafke-eid install / uninstall / test / dubbelklikken", () => {
+  const paths = { dir: "/x/DafkeDD/eid", exe: "/x/DafkeDD/eid/dafke-eid", config: "", log: "", autostart: "", shortcut: "" };
+  function system(overrides: Partial<import("../../packages/eid/src/node/cli").SystemDeps> = {}) {
+    const calls: string[] = [];
+    const sys = {
+      isSea: () => false,
+      runningInstalled: () => false,
+      appDir: () => "/x/DafkeDD/eid",
+      embedded: () => ({ origins: ["https://ingebakken.be"] }),
+      install: async (config: object, embedded: object) => {
+        calls.push(`install ${JSON.stringify(config)} ${JSON.stringify(embedded)}`);
+        return { paths, url: "http://127.0.0.1:47820/", running: true, upgraded: false };
+      },
+      uninstall: async () => {
+        calls.push("uninstall");
+        return { paths, deferred: true };
+      },
+      isRunning: async () => true,
+      openUrl: (url: string) => calls.push(`open ${url}`),
+      ...overrides,
+    };
+    return { sys, calls };
+  }
+  const reader = { createReader: async () => createEidReader({ backend: new MockPcscBackend() }) };
+
+  it("install bewaart opgegeven instellingen en opent de testpagina", async () => {
+    const { sys, calls } = system();
+    const result = await runCli(["install", "--origin", "https://a.be", "--no-testpage"], { ...reader, system: sys }, {});
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("DafkeDD eID geïnstalleerd");
+    expect(result.stdout).toContain("Status:     draait");
+    expect(calls).toEqual(['install {"origins":["https://a.be"],"testpage":false} {"origins":["https://ingebakken.be"]}', "open http://127.0.0.1:47820/"]);
+    expect(result.holdMs).toBeUndefined();
+  });
+
+  it("install --silent opent geen browser", async () => {
+    const { sys, calls } = system();
+    await runCli(["install", "--silent"], { ...reader, system: sys }, {});
+    expect(calls).toHaveLength(1);
+  });
+
+  it("install meldt als het programma niet antwoordt", async () => {
+    const { sys } = system({
+      install: async () => ({ paths, url: "http://127.0.0.1:47820/", running: false, upgraded: true }),
+    });
+    const result = await runCli(["install"], { ...reader, system: sys }, {});
+    expect(result.code).toBe(2);
+    expect(result.stdout).toContain("bijgewerkt");
+    expect(result.stderr).toContain("antwoordt (nog) niet");
+  });
+
+  it("dubbelklikken op het gedownloade programma installeert, met een venster dat even openblijft", async () => {
+    const { sys, calls } = system({ isSea: () => true, runningInstalled: () => false });
+    const result = await runCli([], { ...reader, system: sys }, {});
+    expect(calls[0]).toMatch(/^install /);
+    expect(result.holdMs).toBe(8000);
+    expect(result.stdout).toContain("Dit venster sluit vanzelf");
+  });
+
+  it("het geïnstalleerde programma zonder commando start de bridge (met config.json)", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(join(tmpdir(), "installed-"));
+    const { sys, calls } = system({ isSea: () => true, runningInstalled: () => true, appDir: () => dir });
+    const result = await runCli(["--port", "0"], { ...reader, system: sys }, {});
+    expect(calls).toEqual([]);
+    expect(result.server).toBeDefined();
+    expect(result.stdout).toContain(`Logbestand: ${join(dir, "dafke-eid.log")}`);
+    expect(result.stdout).toContain("Toegelaten websites: https://ingebakken.be");
+    await result.server!.stop();
+  });
+
+  it("uninstall", async () => {
+    const { sys, calls } = system();
+    const result = await runCli(["uninstall"], { ...reader, system: sys }, {});
+    expect(calls).toEqual(["uninstall"]);
+    expect(result.stdout).toContain("verdwijnt binnen enkele seconden");
+  });
+
+  it("test opent de testpagina als de bridge draait", async () => {
+    const { sys, calls } = system();
+    expect((await runCli(["test", "--port", "48001"], { ...reader, system: sys }, {})).stdout).toContain("http://127.0.0.1:48001/");
+    expect(calls).toEqual(["open http://127.0.0.1:48001/"]);
+    const down = system({ isRunning: async () => false });
+    const result = await runCli(["test"], { ...reader, system: down.sys }, {});
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("draait niet");
+  });
+
+  it("serve met --no-testpage en --log-file", async () => {
+    const { sys } = system();
+    const dir = (await import("node:fs")).mkdtempSync((await import("node:path")).join((await import("node:os")).tmpdir(), "log-"));
+    const result = await runCli(["serve", "--port", "0", "--no-testpage", "--log-file", `${dir}/x.log`], { ...reader, system: sys }, {});
+    expect(result.stdout).not.toContain("Testpagina:");
+    const res = await fetch(`http://127.0.0.1:${result.server!.bridge.port}/`);
+    expect(res.status).toBe(404);
+    await result.server!.stop();
+    expect((await import("node:fs")).readFileSync(`${dir}/x.log`, "utf8")).toContain("gestart op");
+  });
+});

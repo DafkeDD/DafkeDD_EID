@@ -9,11 +9,11 @@ afterEach(async () => {
   cleanup = [];
 });
 
-async function bridgeWithCard(token?: string): Promise<{ bridge: Bridge; reader: EidReader }> {
+async function bridgeWithCard(token?: string, authOrigins?: string[]): Promise<{ bridge: Bridge; reader: EidReader }> {
   const backend = new MockPcscBackend().addReader("Lezer");
   backend.insertCard("Lezer", await createSampleCard());
   const reader = await createEidReader({ backend, pollTimeoutMs: 20 });
-  const bridge = await startBridge({ reader, port: 0, ...(token ? { token } : {}) });
+  const bridge = await startBridge({ reader, port: 0, ...(token ? { token } : {}), ...(authOrigins ? { authOrigins } : {}) });
   cleanup.push(async () => {
     await bridge.close();
     await reader.close();
@@ -42,6 +42,17 @@ describe("EidClient tegen een echte bridge (mock-lezer)", () => {
   it("zet foutantwoorden om naar EidError", async () => {
     const { bridge } = await bridgeWithCard();
     await expect(new EidClient({ url: bridge.url }).readCard({ reader: "Bestaat niet" })).rejects.toMatchObject({ code: "no-reader" });
+  });
+
+  it("meldt aan met PIN (POST) en geeft triesLeft door bij een verkeerde PIN", async () => {
+    const { bridge } = await bridgeWithCard(undefined, ["https://sso.voorbeeld.be"]);
+    // Node's fetch stuurt geen Origin; zoals een browser doet, zetten we hem zelf.
+    const withOrigin: typeof fetch = (input, init) => fetch(input, { ...init, headers: { ...(init?.headers as Record<string, string>), origin: "https://sso.voorbeeld.be" } });
+    const client = new EidClient({ url: bridge.url, fetch: withOrigin });
+    await expect(client.authenticate({ nonce: "n".repeat(44), pin: "0000" })).rejects.toMatchObject({ code: "pin-incorrect", triesLeft: 2 });
+    const { token, reader } = await client.authenticate({ nonce: "n".repeat(44), pin: "1234" });
+    expect(reader).toBe("Lezer");
+    expect(token.format).toBe("web-eid:1.0");
   });
 
   it("geeft no-bridge als er niets luistert", async () => {

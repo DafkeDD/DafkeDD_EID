@@ -8,7 +8,9 @@ import {
   EidError,
   errorFromBody,
   TOKEN_HEADER,
+  type AuthenticateResponse,
   type BridgeEvent,
+  type EidAuthToken,
   type BridgeStatus,
   type CardResponse,
   type EidCardData,
@@ -34,10 +36,26 @@ export interface ReadCardResult {
   card: EidCardData;
 }
 
+export interface AuthenticateOptions {
+  /** Uitdaging van je server (minstens 44 tekens, bv. base64 van 32 willekeurige bytes). */
+  nonce: string;
+  /** PIN die de gebruiker intypte (4–12 cijfers). Wordt nergens bewaard. */
+  pin: string;
+  reader?: string;
+  signal?: AbortSignal;
+}
+
+export interface AuthenticateResult {
+  reader: string;
+  token: EidAuthToken;
+}
+
 /** Wat de store nodig heeft. `EidClient` (echte bridge) en `MockEidClient` implementeren dit. */
 export interface EidClientLike {
   status(signal?: AbortSignal): Promise<BridgeStatus>;
   readCard(options?: ReadCardOptions): Promise<ReadCardResult>;
+  /** Aanmelden met PIN (alleen als de website in authOrigins van de bridge staat). */
+  authenticate?(options: AuthenticateOptions): Promise<AuthenticateResult>;
   /** Live gebeurtenissen. De eerste is `status` (of `disconnected`). Geeft een functie om te stoppen. */
   subscribe(listener: (event: EidClientEvent) => void): () => void;
 }
@@ -74,13 +92,16 @@ export class EidClient implements EidClientLike {
     this.#reconnectMs = options.reconnectMs ?? 3000;
   }
 
-  async #get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  async #get<T>(path: string, signal?: AbortSignal, body?: unknown): Promise<T> {
     let response: Response;
     try {
+      const headers: Record<string, string> = this.#token ? { [TOKEN_HEADER]: this.#token } : {};
+      if (body !== undefined) headers["content-type"] = "application/json";
       response = await this.#fetch(`${this.url}${path}`, {
-        method: "GET",
-        headers: this.#token ? { [TOKEN_HEADER]: this.#token } : {},
+        method: body === undefined ? "GET" : "POST",
+        headers,
         cache: "no-store",
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         ...(signal ? { signal } : {}),
       });
     } catch (error) {
@@ -89,14 +110,14 @@ export class EidClient implements EidClientLike {
       // bridge bewust geen CORS-headers en ziet de browser het als netwerkfout).
       throw new EidError("no-bridge", "De eID-lezer (dafke-eid) is niet bereikbaar", { cause: error });
     }
-    let body: unknown;
+    let json: unknown;
     try {
-      body = await response.json();
+      json = await response.json();
     } catch {
-      body = null;
+      json = null;
     }
-    if (!response.ok) throw errorFromBody(body);
-    return body as T;
+    if (!response.ok) throw errorFromBody(json);
+    return json as T;
   }
 
   status(signal?: AbortSignal): Promise<BridgeStatus> {
@@ -110,6 +131,12 @@ export class EidClient implements EidClientLike {
     const query = params.size > 0 ? `?${params}` : "";
     const { reader, card } = await this.#get<CardResponse>(`/v1/card${query}`, options.signal);
     return { reader, card: decodeCardData(card) };
+  }
+
+  /** POST /v1/authenticate. De bridge ondertekent de origin van deze pagina (Origin-header). */
+  async authenticate(options: AuthenticateOptions): Promise<AuthenticateResult> {
+    const body = { nonce: options.nonce, pin: options.pin, ...(options.reader !== undefined ? { reader: options.reader } : {}) };
+    return this.#get<AuthenticateResponse>("/v1/authenticate", options.signal, body);
   }
 
   subscribe(listener: (event: EidClientEvent) => void): () => void {

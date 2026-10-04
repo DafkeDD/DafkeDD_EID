@@ -2,7 +2,7 @@
 
 Belgische eID-kaarten uitlezen in gehoste Next.js/React-apps, met optioneel aanmelden met PIN en een NestJS-module voor de backend. Werkt op Windows en macOS.
 
-> Status: fase 4. De bridge (`dafke-eid`) biedt de kaart aan toegelaten webapps aan, en `@dafkedd/eid/react` leest ze live. Het installeerbare programma voor gebruikers volgt in fase 5. Zie [docs/plan.md](docs/plan.md).
+> Status: fase 6. Lezen werkt, het programma voor gebruikers installeert zichzelf, en aanmelden met PIN (`useEidLogin`, Web eID-token) werkt voor websites in `authOrigins`. De controle van het token op de server (`/server`, `/nestjs`) volgt in fase 7. Zie [docs/plan.md](docs/plan.md).
 
 ## Hoe het werkt
 
@@ -61,6 +61,28 @@ npm run playground        # http://localhost:3000  (zonder bridge: /?mock=1)
 
 Zie [docs/bridge.md](docs/bridge.md) voor het protocol en het gebruik in React, en
 [docs/beveiliging.md](docs/beveiliging.md) voor de beveiliging.
+
+## Aanmelden met PIN
+
+Alleen voor je eigen login/SSO-website: start de bridge met `--auth-origin https://sso.voorbeeld.be`,
+laat je server een nonce maken, vraag de PIN in je eigen dialoog en roep
+`useEidLogin().login({ nonce, pin })` aan. Je krijgt een Web eID-token (`web-eid:1.0`) voor je server.
+Zie [docs/bridge.md](docs/bridge.md#aanmelden-met-pin).
+
+## Programma voor gebruikers
+
+Downloaden uit de GitHub-release en dubbelklikken (Windows): het installeert zichzelf in het
+profiel van de gebruiker (geen administratorrechten), start mee met de computer en opent de
+**testpagina** op http://127.0.0.1:47820/ (status, lezers live, test lezen met gemaskeerde
+gegevens, diagnose, logboek).
+
+```bash
+npm run build:exe                               # bouwt het programma voor dit platform
+npm run build:exe -- --origin https://app.x.be  # met ingebakken toegelaten websites
+```
+
+Zie [installeren.md](docs/installeren.md) (gebruikers), [uitrollen.md](docs/uitrollen.md) (IT) en
+[releasen.md](docs/releasen.md) (bouwen en ondertekenen).
 
 ## Releases
 

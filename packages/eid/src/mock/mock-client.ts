@@ -2,8 +2,8 @@
  * MockEidClient: doet alsof er een bridge met kaartlezer is, volledig in de browser.
  * Voor demo's, Storybook-achtige pagina's en tests zonder `dafke-eid`.
  */
-import { EidError, PROTOCOL_VERSION, readEid, type BridgeStatus, type CardTransport, type ReaderInfo } from "../core";
-import type { EidClientEvent, EidClientLike, ReadCardOptions, ReadCardResult } from "../react/client";
+import { authenticateWithCard, EidError, PROTOCOL_VERSION, readEid, type BridgeStatus, type CardTransport, type ReaderInfo } from "../core";
+import type { AuthenticateOptions, AuthenticateResult, EidClientEvent, EidClientLike, ReadCardOptions, ReadCardResult } from "../react/client";
 import { VERSION } from "../version";
 import { createSampleCard } from "./sample-card";
 
@@ -16,6 +16,11 @@ export interface MockEidClientOptions {
   bridgeAvailable?: boolean;
   /** Kunstmatige leestijd in ms (zoals een echte lezer). Standaard 600. */
   readDelayMs?: number;
+  /**
+   * Origin die ondertekend wordt bij aanmelden (zoals de bridge de Origin-header gebruikt).
+   * Standaard `location.origin` in de browser, anders http://localhost.
+   */
+  origin?: string;
 }
 
 const DEFAULT_ATR = "3b7f96000080318065b085040120120fff829000";
@@ -24,6 +29,7 @@ export class MockEidClient implements EidClientLike {
   readonly readerName: string;
   readonly #listeners = new Set<(event: EidClientEvent) => void>();
   readonly #readDelayMs: number;
+  readonly #origin: string | undefined;
   #available: boolean;
   #card: CardTransport | undefined;
   #cardPromise: Promise<CardTransport> | undefined;
@@ -32,6 +38,7 @@ export class MockEidClient implements EidClientLike {
     this.readerName = options.readerName ?? "DafkeDD Virtuele Lezer";
     this.#available = options.bridgeAvailable ?? true;
     this.#readDelayMs = options.readDelayMs ?? 600;
+    this.#origin = options.origin;
     if (options.cardInserted ?? true) this.#cardPromise = createSampleCard().then((card) => (this.#card = card));
   }
 
@@ -63,6 +70,29 @@ export class MockEidClient implements EidClientLike {
     if (this.#card !== card) throw new EidError("card-removed", "De kaart is verwijderd");
     const data = await readEid(card, { photo: options.photo ?? true });
     return { reader: this.readerName, card: data };
+  }
+
+  /** Aanmelden op de virtuele kaart (PIN van de voorbeeldkaart: 1234). Eén PIN-poging per aanvraag, zoals de bridge. */
+  async authenticate(options: AuthenticateOptions): Promise<AuthenticateResult> {
+    if (!this.#available) throw new EidError("no-bridge", "De eID-lezer (dafke-eid) is niet bereikbaar");
+    const card = this.#card ?? (await this.#cardPromise);
+    if (!card) throw new EidError("no-card", "Geen kaart in de lezer");
+    await new Promise((resolve) => setTimeout(resolve, this.#readDelayMs));
+    if (this.#card !== card) throw new EidError("card-removed", "De kaart is verwijderd");
+    const origin = this.#origin ?? (globalThis as { location?: { origin?: string } }).location?.origin ?? "http://localhost";
+    let pin: string | null = options.pin;
+    const token = await authenticateWithCard(card, {
+      origin,
+      nonce: options.nonce,
+      pin: async ({ retry, triesLeft }) => {
+        if (retry) throw new EidError("pin-incorrect", `Verkeerde PIN, nog ${triesLeft ?? "?"} poging(en)`, triesLeft !== null ? { triesLeft } : {});
+        const value = pin;
+        pin = null;
+        return value;
+      },
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    return { reader: this.readerName, token };
   }
 
   subscribe(listener: (event: EidClientEvent) => void): () => void {

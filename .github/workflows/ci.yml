@@ -59,16 +59,80 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
+  # Het zelfstandige programma bouwen en echt laten draaien op elk platform.
+  exe:
+    name: programma (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: pcsc-lite installeren (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libpcsclite1
+
+      - name: Programma bouwen
+        run: npm run build:exe
+
+      - name: Programma testen (CLI, PC/SC laden, virtuele lezer)
+        run: |
+          EXE=$(ls dist-bin/dafke-eid-* | grep -v sha256)
+          "$EXE" --version
+          "$EXE" diag
+          "$EXE" read --mock
+
+      - name: Testpagina en bridge vanuit het programma
+        run: |
+          EXE=$(ls dist-bin/dafke-eid-* | grep -v sha256)
+          "$EXE" serve --mock --port 47899 > serve.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:47899/v1/status && break; sleep 1; done
+          curl -sf http://127.0.0.1:47899/ | grep -q "DafkeDD eID"
+          curl -sf -H "Sec-Fetch-Site: same-origin" http://127.0.0.1:47899/v1/test/diag | grep -q "SELECT identiteit: SW 9000"
+          curl -sf -H "Origin: http://localhost:3000" http://127.0.0.1:47899/v1/card | grep -q '"lastName":"Specimen"'
+          cat serve.log
+
+      - name: Installeren en verwijderen (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          EXE=$(ls dist-bin/dafke-eid-*.exe)
+          "$EXE" install --silent --port 47898
+          curl -sf http://127.0.0.1:47898/v1/status
+          reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" //v "DafkeDD eID"
+          test -f "$LOCALAPPDATA/DafkeDD/eid/dafke-eid.exe"
+          test -f "$APPDATA/Microsoft/Windows/Start Menu/Programs/DafkeDD eID testen.url"
+          "$LOCALAPPDATA/DafkeDD/eid/dafke-eid.exe" uninstall --silent
+          sleep 5
+          ! curl -sf http://127.0.0.1:47898/v1/status
+          ! reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" //v "DafkeDD eID"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dafke-eid-${{ runner.os }}
+          path: dist-bin/
+          retention-days: 7
+
   # Eén vaste naam voor de ruleset op main ("CI-check"), ongeacht de matrix.
   ci-check:
     name: CI-check
-    needs: test
+    needs: [test, exe]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Alle platformen groen?
         run: |
-          if [ "${{ needs.test.result }}" != "success" ]; then
+          if [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.exe.result }}" != "success" ]; then
             echo "::error::Een of meer platformen faalden."
             exit 1
           fi

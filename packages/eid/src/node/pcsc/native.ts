@@ -18,6 +18,7 @@ import {
   SCARD_STATE,
 } from "./constants";
 import { isServiceGone, PcscError } from "./errors";
+import { prepareNativeModules } from "../runtime";
 
 type Koffi = typeof import("koffi").default;
 type Handle = number | bigint;
@@ -75,6 +76,8 @@ function decodeMultiString(data: Uint8Array | Uint16Array, length: number): stri
 
 /** Laadt koffi en de PC/SC-bibliotheek van het platform. */
 export async function createNativeBackend(options: NativePcscOptions = {}): Promise<NativePcscBackend> {
+  // In het zelfstandige programma eerst de ingebedde koffi-addon klaarzetten.
+  prepareNativeModules();
   const koffi = (await import("koffi")).default;
   return new NativePcscBackend(koffi, options);
 }

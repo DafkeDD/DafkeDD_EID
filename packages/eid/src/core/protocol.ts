@@ -5,12 +5,14 @@
  *   GET  /v1/readers                → { readers: ReaderInfo[] }
  *   GET  /v1/card?reader=…&photo=0  → CardResponse
  *   GET  /v1/events                 → Server-Sent Events: "status" en daarna BridgeEvent's
+ *   POST /v1/authenticate           → AuthenticateResponse (alleen voor websites in authOrigins)
  *
  * Fouten: HTTP-status + BridgeErrorBody. Bytes (foto, certificaten) gaan als base64.
  */
 import { fromBase64, toBase64 } from "./bytes";
 import { EID_ERROR_CODES, EidError, type EidErrorCode } from "./errors";
 import type { EidCardData } from "./types";
+import type { EidAuthToken } from "./auth";
 
 export const PROTOCOL_VERSION = 1;
 export const DEFAULT_BRIDGE_PORT = 47820;
@@ -41,7 +43,19 @@ export type BridgeEvent =
   | { type: "card-removed"; reader: string };
 
 export interface BridgeErrorBody {
-  error: { code: EidErrorCode; message: string };
+  error: { code: EidErrorCode; message: string; triesLeft?: number };
+}
+
+/** Body van POST /v1/authenticate. De origin komt uit de Origin-header van de browser, niet uit de body. */
+export interface AuthenticateRequest {
+  nonce: string;
+  pin: string;
+  reader?: string;
+}
+
+export interface AuthenticateResponse {
+  reader: string;
+  token: EidAuthToken;
 }
 
 /** EidCardData zoals het over JSON gaat: alle bytes als base64. */
@@ -97,7 +111,8 @@ export function decodeCardData(json: EidCardJson): EidCardData {
 export function errorFromBody(body: unknown, fallback: EidErrorCode = "internal"): EidError {
   const error = (body as Partial<BridgeErrorBody> | null)?.error;
   const code = error && (EID_ERROR_CODES as readonly string[]).includes(error.code) ? error.code : fallback;
-  return new EidError(code, typeof error?.message === "string" ? error.message : code);
+  const triesLeft = typeof error?.triesLeft === "number" ? error.triesLeft : undefined;
+  return new EidError(code, typeof error?.message === "string" ? error.message : code, triesLeft !== undefined ? { triesLeft } : {});
 }
 
 const PATTERN = /^(https?):\/\/(\*\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)*|\[[0-9a-f:.]+\])(?::(\d{1,5}|\*))?$/;

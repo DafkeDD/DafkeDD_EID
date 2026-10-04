@@ -4,7 +4,9 @@
  */
 import {
   ADDRESS_TAGS,
+  ALGORITHM_REFERENCE,
   digest,
+  fromBase64,
   encodeTlv,
   fromHex,
   IDENTITY_TAGS,
@@ -13,6 +15,16 @@ import {
   type TlvRecord,
 } from "../core";
 import { SAMPLE_PHOTO_HEX } from "./sample-photo";
+import { ecdsaP384SignHash, rsaPkcs1Sha256SignHash } from "./soft-crypto";
+import {
+  TEST_AUTH_CERT_EC,
+  TEST_AUTH_CERT_RSA,
+  TEST_AUTH_KEY_EC_D,
+  TEST_AUTH_KEY_RSA_D,
+  TEST_AUTH_KEY_RSA_N,
+  TEST_CITIZEN_CA,
+  TEST_ROOT_CA,
+} from "./test-pki";
 import { VirtualCard, type VirtualCardOptions } from "./virtual-card";
 
 export interface SampleIdentityFields {
@@ -77,8 +89,30 @@ export interface SampleCardOptions extends VirtualCardOptions {
   extraIdentityFields?: TlvRecord[];
   /** Overschrijft de foto-hash (om een vervalste foto te testen). */
   photoHash?: Uint8Array;
-  /** Certificaten (DER) om op de kaart te zetten. */
+  /**
+   * Certificaten (DER) om op de kaart te zetten. Niet opgegeven: de test-PKI
+   * (authenticatiecertificaat EC P-384 bij applet 1.8, RSA 2048 bij 1.7).
+   */
   certificates?: Partial<Record<"authentication" | "signing" | "ca" | "root" | "rrn", Uint8Array>>;
+  /** PIN van de virtuele kaart. Standaard "1234". `false` = geen aanmelden. */
+  pin?: string | false;
+  /** Resterende PIN-pogingen bij de start. Standaard 3. */
+  pinTries?: number;
+}
+
+/** PIN van de voorbeeldkaart. */
+export const SAMPLE_PIN = "1234";
+
+/** Ondertekent zoals een echte kaart met de test-sleutel die bij de appletversie hoort. */
+export function sampleSigner(appletVersion: "1.7" | "1.8" = "1.8") {
+  return (hash: Uint8Array, algorithmReference: number): Uint8Array => {
+    if (appletVersion === "1.8") {
+      if (algorithmReference !== ALGORITHM_REFERENCE.ecdsaSha384) throw new Error("Virtuele kaart 1.8: alleen ECDSA met SHA-384");
+      return ecdsaP384SignHash(hash, TEST_AUTH_KEY_EC_D);
+    }
+    if (algorithmReference !== ALGORITHM_REFERENCE.rsaPkcs1Sha256) throw new Error("Virtuele kaart 1.7: alleen RSA PKCS#1 met SHA-256");
+    return rsaPkcs1Sha256SignHash(hash, TEST_AUTH_KEY_RSA_N, TEST_AUTH_KEY_RSA_D);
+  };
 }
 
 const text = (tag: number, value: string): TlvRecord => ({ tag, value: utf8Encode(value) });
@@ -136,7 +170,18 @@ export async function createSampleFiles(options: SampleCardOptions = {}) {
     return out;
   };
 
-  const certs = options.certificates ?? {};
+  const padded = (der: Uint8Array) => {
+    // Echte certificaatbestanden zijn opgevuld met nullen.
+    const out = new Uint8Array(der.length + 64);
+    out.set(der);
+    return out;
+  };
+  const certs = options.certificates ?? {
+    authentication: padded(fromBase64((options.appletVersion ?? "1.8") === "1.8" ? TEST_AUTH_CERT_EC : TEST_AUTH_CERT_RSA)),
+    ca: fromBase64(TEST_CITIZEN_CA),
+    root: fromBase64(TEST_ROOT_CA),
+    rrn: fromBase64(TEST_CITIZEN_CA),
+  };
   return {
     identity: pad(identity, 0xd0),
     identitySignature: new Uint8Array(96),
@@ -155,5 +200,12 @@ export async function createSampleFiles(options: SampleCardOptions = {}) {
 export async function createSampleCard(options: SampleCardOptions = {}): Promise<VirtualCard> {
   const files = await createSampleFiles(options);
   const cardData = options.cardData === undefined ? sampleCardData(options.appletVersion) : options.cardData;
-  return new VirtualCard(files, { ...options, cardData });
+  const pin = options.pin === undefined ? SAMPLE_PIN : options.pin;
+  return new VirtualCard(files, {
+    ...options,
+    cardData,
+    ...(pin === false
+      ? {}
+      : { auth: { pin, ...(options.pinTries !== undefined ? { triesLeft: options.pinTries } : {}), sign: sampleSigner(options.appletVersion) } }),
+  });
 }

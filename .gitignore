@@ -9,3 +9,4 @@ coverage
 .tmp-tests
 .next
 next-env.d.ts.bak
+build

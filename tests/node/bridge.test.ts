@@ -12,7 +12,7 @@ interface Res {
 }
 
 /** node:http in plaats van fetch: zo kunnen we ook Host en Origin vrij kiezen. */
-function call(bridge: Bridge, path: string, headers: Record<string, string> = {}, method = "GET"): Promise<Res> {
+function call(bridge: Bridge, path: string, headers: Record<string, string> = {}, method = "GET", body?: string): Promise<Res> {
   return new Promise((resolve, reject) => {
     const req = request(
       { host: "127.0.0.1", port: bridge.port, path, method, headers: { host: `127.0.0.1:${bridge.port}`, ...headers } },
@@ -31,14 +31,14 @@ function call(bridge: Bridge, path: string, headers: Record<string, string> = {}
       },
     );
     req.on("error", reject);
-    req.end();
+    req.end(body);
   });
 }
 
 const ORIGIN = { origin: "http://localhost:3000" };
 let cleanup: Array<() => Promise<void>> = [];
 
-async function setup(options: { token?: string; origins?: string[]; card?: boolean } = {}) {
+async function setup(options: { token?: string; origins?: string[]; authOrigins?: string[]; card?: boolean; testpage?: boolean } = {}) {
   const backend = new MockPcscBackend().addReader("Lezer");
   let card: VirtualCard | undefined;
   if (options.card !== false) {
@@ -51,6 +51,8 @@ async function setup(options: { token?: string; origins?: string[]; card?: boole
     port: 0,
     ...(options.token ? { token: options.token } : {}),
     ...(options.origins ? { origins: options.origins } : {}),
+    ...(options.testpage !== undefined ? { testpage: options.testpage } : {}),
+    ...(options.authOrigins ? { authOrigins: options.authOrigins } : {}),
   });
   cleanup.push(async () => {
     await bridge.close();
@@ -241,5 +243,195 @@ describe("bridge: events (SSE)", () => {
       req.end();
     });
     expect(status).toBe(200);
+  });
+});
+
+const OWN = { "sec-fetch-site": "same-origin" };
+const PII = ["Specimen", "Jan Pieter", "85031512369", "Voorbeeldstraat"];
+
+describe("bridge: testpagina", () => {
+  it("serveert de pagina met strikte CSP en zonder framing", async () => {
+    const { bridge } = await setup();
+    const page = await call(bridge, "/");
+    expect(page.status).toBe(200);
+    expect(page.headers["content-type"]).toContain("text/html");
+    expect(page.body).toContain("DafkeDD eID");
+    expect(page.headers["content-security-policy"]).toContain("default-src 'none'");
+    expect(page.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(page.headers["x-frame-options"]).toBe("DENY");
+    expect((await call(bridge, "/testpage.js")).headers["content-type"]).toContain("javascript");
+    expect((await call(bridge, "/testpage.css")).headers["content-type"]).toContain("text/css");
+  });
+
+  it("staat uit met testpage: false", async () => {
+    const { bridge } = await setup({ testpage: false });
+    expect((await call(bridge, "/")).status).toBe(404);
+    expect((await call(bridge, "/v1/test/info", OWN)).status).toBe(404);
+  });
+
+  it("geeft info aan de eigen pagina, niet aan andere websites", async () => {
+    const { bridge } = await setup({ origins: ["https://app.voorbeeld.be"] });
+    const info = await call(bridge, "/v1/test/info", OWN);
+    expect(info.status).toBe(200);
+    expect(info.json).toMatchObject({ origins: ["https://app.voorbeeld.be"], tokenRequired: false, protocol: 1 });
+    expect((await call(bridge, "/v1/test/info", { origin: "https://app.voorbeeld.be" })).status).toBe(403);
+    expect((await call(bridge, "/v1/test/info", { "sec-fetch-site": "cross-site" })).status).toBe(403);
+    expect((await call(bridge, "/v1/test/info", { origin: `http://127.0.0.1:${bridge.port}` })).status).toBe(200);
+    expect((await call(bridge, "/v1/test/info", { origin: `http://localhost:${bridge.port}` })).status).toBe(200);
+  });
+
+  it("laat de eigen pagina de gewone endpoints gebruiken, ook met een strikte allowlist", async () => {
+    const { bridge } = await setup({ origins: ["https://app.voorbeeld.be"] });
+    expect((await call(bridge, "/v1/status", { origin: `http://127.0.0.1:${bridge.port}` })).status).toBe(200);
+    expect((await call(bridge, "/v1/card", OWN)).status).toBe(200);
+  });
+
+  it("vraagt het token van de eigen pagina alleen voor de kaart", async () => {
+    const { bridge } = await setup({ token: "geheim" });
+    expect((await call(bridge, "/v1/test/info", OWN)).json.tokenRequired).toBe(true);
+    expect((await call(bridge, "/v1/status", OWN)).status).toBe(200);
+    expect((await call(bridge, "/v1/card", OWN)).status).toBe(401);
+    expect((await call(bridge, "/v1/card", { ...OWN, "x-dafke-eid-token": "geheim" })).status).toBe(200);
+  });
+
+  it("controleert of een website toegelaten is", async () => {
+    const { bridge } = await setup({ origins: ["https://*.voorbeeld.be"] });
+    const yes = await call(bridge, `/v1/test/check-origin?origin=${encodeURIComponent("https://app.voorbeeld.be/")}`, OWN);
+    expect(yes.json).toMatchObject({ origin: "https://app.voorbeeld.be", allowed: true });
+    const no = await call(bridge, `/v1/test/check-origin?origin=${encodeURIComponent("https://evil.example")}`, OWN);
+    expect(no.json.allowed).toBe(false);
+  });
+
+  it("maakt een diagnose zonder persoonsgegevens", async () => {
+    const { bridge } = await setup();
+    const diag = await call(bridge, "/v1/test/diag", OWN);
+    expect(diag.status).toBe(200);
+    expect(diag.body).toContain('"Lezer": kaart aanwezig');
+    expect(diag.body).toContain("GET CARD DATA: SW 9000, applet 1.8");
+    expect(diag.body).toContain("SELECT identiteit: SW 9000 (Belgische eID)");
+    for (const word of PII) expect(diag.body).not.toContain(word);
+  });
+
+  it("houdt een logboek bij zonder persoonsgegevens", async () => {
+    const { bridge, backend } = await setup({ origins: ["https://app.voorbeeld.be"] });
+    await call(bridge, "/v1/card", { origin: "https://app.voorbeeld.be" });
+    await call(bridge, "/v1/card", { origin: "https://evil.example" });
+    backend.removeCard("Lezer");
+    await until(() => bridge.logbook.entries().some((e) => e.message.includes("Kaart verwijderd")));
+    const log = await call(bridge, "/v1/test/log", OWN);
+    const messages = (log.json.entries as Array<{ message: string }>).map((e) => e.message).join("\n");
+    expect(messages).toContain("gestart op");
+    expect(messages).toContain("GET /v1/card → 200");
+    expect(messages).toContain("van https://app.voorbeeld.be");
+    expect(messages).toContain("Geweigerd: https://evil.example");
+    expect(messages).toContain('Kaart verwijderd uit "Lezer"');
+    for (const word of PII) expect(messages).not.toContain(word);
+  });
+});
+
+const SSO = "https://sso.voorbeeld.be";
+const NONCE = "n".repeat(44);
+const post = (bridge: Bridge, body: unknown, headers: Record<string, string> = { origin: SSO }) =>
+  call(bridge, "/v1/authenticate", { "content-type": "application/json", ...headers }, "POST", typeof body === "string" ? body : JSON.stringify(body));
+
+describe("bridge: aanmelden met PIN", () => {
+  it("geeft een web-eid-token aan een website in authOrigins, met de Origin-header ondertekend", async () => {
+    const { bridge } = await setup({ authOrigins: [SSO] });
+    const res = await post(bridge, { nonce: NONCE, pin: "1234" });
+    expect(res.status).toBe(200);
+    expect(res.json.reader).toBe("Lezer");
+    expect(res.json.token).toMatchObject({ format: "web-eid:1.0", algorithm: "ES384" });
+    const { createHash, verify, X509Certificate } = await import("node:crypto");
+    const cert = new X509Certificate(Buffer.from(res.json.token.unverifiedCertificate, "base64"));
+    const signed = Buffer.concat([createHash("sha384").update(SSO).digest(), createHash("sha384").update(NONCE).digest()]);
+    expect(verify("sha384", signed, { key: cert.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(res.json.token.signature, "base64"))).toBe(true);
+    expect(res.headers["access-control-allow-origin"]).toBe(SSO);
+  });
+
+  it("weigert aanmelden voor websites die alleen mogen lezen, of helemaal niet toegelaten zijn", async () => {
+    const { bridge } = await setup({ origins: ["https://app.voorbeeld.be"], authOrigins: [SSO] });
+    const readOnly = await post(bridge, { nonce: NONCE, pin: "1234" }, { origin: "https://app.voorbeeld.be" });
+    expect(readOnly.status).toBe(403);
+    expect(readOnly.json.error.code).toBe("auth-not-allowed");
+    expect((await post(bridge, { nonce: NONCE, pin: "1234" }, { origin: "https://evil.example" })).status).toBe(403);
+    expect((await post(bridge, { nonce: NONCE, pin: "1234" }, {})).json.error.code).toBe("auth-not-allowed");
+  });
+
+  it("standaard mag niemand aanmelden (authOrigins leeg)", async () => {
+    const { bridge } = await setup();
+    expect((await post(bridge, { nonce: NONCE, pin: "1234" }, { origin: "http://localhost:3000" })).json.error.code).toBe("auth-not-allowed");
+  });
+
+  it("een website die alleen mag aanmelden, kan de kaart niet lezen", async () => {
+    const { bridge } = await setup({ origins: ["https://app.voorbeeld.be"], authOrigins: [SSO] });
+    expect((await call(bridge, "/v1/status", { origin: SSO })).status).toBe(200);
+    const card = await call(bridge, "/v1/card", { origin: SSO });
+    expect(card.status).toBe(403);
+    expect(card.json.error.message).toContain("alleen aanmelden");
+  });
+
+  it("verkeerde PIN: 409 pin-incorrect met resterende pogingen, en daarna lukt het", async () => {
+    const { bridge } = await setup({ authOrigins: [SSO] });
+    const wrong = await post(bridge, { nonce: NONCE, pin: "0000" });
+    expect(wrong.status).toBe(409);
+    expect(wrong.json.error).toMatchObject({ code: "pin-incorrect", triesLeft: 2 });
+    expect((await post(bridge, { nonce: NONCE, pin: "1234" })).status).toBe(200);
+  });
+
+  it("geblokkeerde PIN: pin-blocked", async () => {
+    const { bridge } = await setup({ authOrigins: [SSO] });
+    for (const pin of ["0000", "1111"]) await post(bridge, { nonce: NONCE, pin });
+    const blocked = await post(bridge, { nonce: NONCE, pin: "2222" });
+    expect(blocked.json.error).toMatchObject({ code: "pin-blocked", triesLeft: 0 });
+  });
+
+  it("controleert de aanvraag vóór de kaart aan te spreken", async () => {
+    const { bridge, card } = await setup({ authOrigins: [SSO] });
+    const before = card!.commands.length;
+    expect((await post(bridge, { nonce: NONCE, pin: "12" })).json.error.code).toBe("bad-request");
+    expect((await post(bridge, { nonce: "kort", pin: "1234" })).json.error.code).toBe("bad-request");
+    expect((await post(bridge, "{kapot")).json.error.code).toBe("bad-request");
+    expect((await post(bridge, "x".repeat(5000))).json.error.code).toBe("bad-request");
+    expect((await call(bridge, "/v1/authenticate", { origin: SSO, "content-type": "text/plain" }, "POST", "{}")).json.error.code).toBe("bad-request");
+    expect(card!.commands.length).toBe(before);
+    expect(card!.pinTriesLeft).toBe(3);
+  });
+
+  it("vraagt het token, ook om aan te melden", async () => {
+    const { bridge } = await setup({ authOrigins: [SSO], token: "geheim" });
+    expect((await post(bridge, { nonce: NONCE, pin: "1234" })).status).toBe(401);
+    expect((await post(bridge, { nonce: NONCE, pin: "1234" }, { origin: SSO, "x-dafke-eid-token": "geheim" })).status).toBe(200);
+  });
+
+  it("staat POST toe in de preflight", async () => {
+    const { bridge } = await setup({ authOrigins: [SSO] });
+    const res = await call(bridge, "/v1/authenticate", { origin: SSO, "access-control-request-method": "POST" }, "OPTIONS");
+    expect(res.headers["access-control-allow-methods"]).toContain("POST");
+  });
+
+  it("de eigen testpagina mag aanmelden (met haar eigen origin)", async () => {
+    const { bridge } = await setup();
+    const res = await post(bridge, { nonce: NONCE, pin: "1234" }, { origin: `http://127.0.0.1:${bridge.port}` });
+    expect(res.status).toBe(200);
+  });
+
+  it("logt nooit PIN of nonce", async () => {
+    const { bridge } = await setup({ authOrigins: [SSO] });
+    await post(bridge, { nonce: NONCE, pin: "0000" });
+    await post(bridge, { nonce: NONCE, pin: "1234" });
+    // Poortnummer eruit: een willekeurige poort kan "1234" bevatten.
+    const text = bridge.logbook.entries().map((e) => e.message).join("\n").replaceAll(String(bridge.port), "<poort>");
+    expect(text).toContain(`Aanmelden gevraagd door ${SSO}`);
+    expect(text).toContain("Aanmelden mislukt");
+    expect(text).toContain("pin-incorrect (nog 2)");
+    expect(text).toContain("Aanmelden gelukt");
+    expect(text).not.toContain("1234");
+    expect(text).not.toContain("0000");
+    expect(text).not.toContain(NONCE);
+  });
+
+  it("GET op /v1/authenticate kan niet", async () => {
+    const { bridge } = await setup({ authOrigins: [SSO] });
+    expect((await call(bridge, "/v1/authenticate", { origin: SSO })).status).toBe(404);
   });
 });

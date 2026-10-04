@@ -4,7 +4,7 @@ import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 import { MockEidClient } from "../../packages/eid/src/mock";
-import { EidProvider, EidReader, fullName, useEid } from "../../packages/eid/src/react";
+import { EidProvider, EidReader, fullName, useEid, useEidLogin } from "../../packages/eid/src/react";
 
 afterEach(cleanup);
 
@@ -67,5 +67,34 @@ describe("EidProvider / useEid", () => {
       </EidProvider>,
     );
     expect(html).toContain("connecting");
+  });
+});
+
+function Login() {
+  const login = useEidLogin();
+  return (
+    <div>
+      <p data-testid="login">{login.status}</p>
+      {login.error && <p data-testid="login-error">{`${login.error.code}:${login.triesLeft}`}</p>}
+      {login.token && <p data-testid="alg">{login.token.algorithm}</p>}
+      <button onClick={() => void login.login({ nonce: "n".repeat(44), pin: "0000" })}>Fout</button>
+      <button onClick={() => void login.login({ nonce: "n".repeat(44), pin: "1234" })}>Goed</button>
+    </div>
+  );
+}
+
+describe("useEidLogin", () => {
+  it("meldt aan op de virtuele kaart, met een duidelijke fout bij een verkeerde PIN", async () => {
+    const client = new MockEidClient({ readDelayMs: 1, origin: "https://sso.voorbeeld.be" });
+    render(
+      <EidProvider client={client} autoRead={false}>
+        <Login />
+      </EidProvider>,
+    );
+    act(() => screen.getByRole("button", { name: "Fout" }).click());
+    expect((await screen.findByTestId("login-error")).textContent).toBe("pin-incorrect:2");
+    act(() => screen.getByRole("button", { name: "Goed" }).click());
+    expect((await screen.findByTestId("alg")).textContent).toBe("ES384");
+    expect(screen.getByTestId("login").textContent).toBe("done");
   });
 });

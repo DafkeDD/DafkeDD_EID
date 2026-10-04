@@ -69,3 +69,31 @@ describe("echte eID", () => {
     for (let i = 0; i < 3; i++) await reader.read(readerName, { photo: false });
   });
 });
+
+/**
+ * Aanmelden met je echte PIN: alleen als EID_TEST_PIN gezet is (PowerShell: $env:EID_TEST_PIN="…").
+ * Opgelet: een verkeerde PIN kost een poging; na 3 is de PIN geblokkeerd.
+ */
+describe.runIf(Boolean(process.env.EID_TEST_PIN))("echte eID: aanmelden met PIN", () => {
+  it("geeft een web-eid-token met een geldige handtekening", async () => {
+    const { createHash, verify, X509Certificate } = await import("node:crypto");
+    const origin = "https://test.dafkedd.be";
+    const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64");
+    let asked = 0;
+    const token = await reader.authenticate(readerName, {
+      origin,
+      nonce,
+      pin: async ({ triesLeft, retry }) => {
+        console.log(`PIN gevraagd (pogingen over: ${triesLeft ?? "?"}${retry ? ", na verkeerde PIN" : ""})`);
+        if (retry || asked++ > 0) return null; // nooit een tweede poging met dezelfde PIN
+        return process.env.EID_TEST_PIN!;
+      },
+    });
+    const cert = new X509Certificate(Buffer.from(token.unverifiedCertificate, "base64"));
+    const hash = token.algorithm === "ES384" ? "sha384" : "sha256";
+    const signed = Buffer.concat([createHash(hash).update(origin).digest(), createHash(hash).update(nonce).digest()]);
+    const key = token.algorithm.startsWith("ES") ? { key: cert.publicKey, dsaEncoding: "ieee-p1363" as const } : cert.publicKey;
+    expect(verify(hash, signed, key, Buffer.from(token.signature, "base64"))).toBe(true);
+    console.log(`Aanmelden gelukt: ${token.algorithm}, certificaat-uitgever: ${cert.issuer.split("\n").find((l) => l.startsWith("CN="))}`);
+  });
+});

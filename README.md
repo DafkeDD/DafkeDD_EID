@@ -2,7 +2,7 @@
 
 Read Belgian eID cards in hosted Next.js/React apps, with optional PIN authentication and a NestJS module for the backend. Works on Windows and macOS.
 
-> Status: phase 4. The bridge (`dafke-eid`) serves the card to allowed web apps, and `@dafkedd/eid/react` reads it live. The installable program for end users follows in phase 5. See [docs/plan.md](docs/plan.md).
+> Status: phase 6. Reading works, the end-user program installs itself, and PIN login (`useEidLogin`, Web eID token) works for websites in `authOrigins`. Server-side token validation (`/server`, `/nestjs`) follows in phase 7. See [docs/plan.md](docs/plan.md).
 
 ## How it works
 
@@ -61,6 +61,27 @@ npm run playground        # http://localhost:3000  (without bridge: /?mock=1)
 
 See [docs/bridge.md](docs/bridge.md) for the protocol and React usage, and
 [docs/beveiliging.md](docs/beveiliging.md) for security (both Dutch).
+
+## PIN login
+
+For your own login/SSO website only: start the bridge with `--auth-origin https://sso.example.be`,
+let your server create a nonce, ask the PIN in your own dialog and call
+`useEidLogin().login({ nonce, pin })`. You get a Web eID token (`web-eid:1.0`) for your server.
+Details (Dutch): [docs/bridge.md](docs/bridge.md#aanmelden-met-pin).
+
+## Program for end users
+
+Download from the GitHub release and double-click (Windows) — it installs itself in the user's
+profile (no admin rights), starts with the computer and opens the **test page** at
+http://127.0.0.1:47820/ (status, live readers, test read with masked data, diagnostics, log).
+
+```bash
+npm run build:exe                               # build the program for this platform
+npm run build:exe -- --origin https://app.x.be  # with allowed websites baked in
+```
+
+Dutch docs: [installeren.md](docs/installeren.md) (users), [uitrollen.md](docs/uitrollen.md) (IT),
+[releasen.md](docs/releasen.md) (building and signing).
 
 ## Releases
 

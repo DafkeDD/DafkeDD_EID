@@ -20,14 +20,17 @@
     "build:playground": "npm run build && npm run build -w @dafkedd/eid-playground",
     "version:patch": "node scripts/bump-version.mjs patch",
     "version:minor": "node scripts/bump-version.mjs minor",
-    "version:major": "node scripts/bump-version.mjs major"
+    "version:major": "node scripts/bump-version.mjs major",
+    "build:exe": "node scripts/build-exe.mjs"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.28.2",
     "jsdom": "^30.1.1",
+    "postject": "^1.0.0-alpha.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tsup": "^8.5.1",
@@ -38,6 +41,11 @@
     "node": ">=20"
   },
   "overrides": {
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "postcss": "^8.5.28"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "koffi@3.3.2": true
   }
 }

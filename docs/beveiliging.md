@@ -14,6 +14,11 @@ bereikbaar, dus bepaalt hij strikt **wie** ze mag opvragen.
 | Gegevens blijven hangen | `Cache-Control: no-store`; de cache in het geheugen wordt gewist zodra de kaart eruit gaat; niets naar schijf |
 | Logbestanden met persoonsgegevens | `--debug` logt alleen methode, pad (zonder querystring), status en duur |
 | Een `*` in de allowlist | Wordt geweigerd bij het starten |
+| Een website laat de gebruiker ongemerkt aanmelden of probeert PIN's | Aanmelden alleen voor websites in de **aparte** lijst `authOrigins` (standaard leeg). Elke aanvraag = één PIN-poging; de kaart blokkeert na 3 |
+| Een token voor site A wordt misbruikt op site B | De bridge ondertekent de **Origin-header van de browser** mee; de server van B controleert tegen zijn eigen origin en weigert. Elke nonce werkt maar één keer (server) |
+| Een login-website leest ook de kaart uit | Een origin die alleen in `authOrigins` staat, mag enkel status, lezers, events en aanmelden — geen kaartgegevens |
+| PIN in logs of geheugen | Nooit gelogd; de body wordt na het lezen overschreven; het PIN-blok wordt na het versturen gewist; de virtuele kaart bewaart geen PIN-blokken |
+| PIN via de website | De website ziet de PIN. Alleen eigen, vertrouwde login-websites in `authOrigins`; een eigen PIN-venster van de bridge komt later |
 | Programma's zonder browser (curl, malware) | Sturen geen Origin; die kunnen PC/SC sowieso rechtstreeks aanspreken. Gebruik het token als je dat toch wil afschermen |
 
 ## Browsers

@@ -59,4 +59,29 @@ export {
   matchOrigin,
   assertOriginPattern,
 } from "./protocol";
-export type { ReaderInfo, BridgeStatus, BridgeEvent, BridgeErrorBody, EidCardJson, CardResponse } from "./protocol";
+export type { ReaderInfo, BridgeStatus, BridgeEvent, BridgeErrorBody, EidCardJson, CardResponse, AuthenticateRequest, AuthenticateResponse } from "./protocol";
+
+export {
+  authenticate,
+  authenticateWithCard,
+  authSignedValue,
+  checkNonce,
+  checkAuthOrigin,
+  computeSignature,
+  encodePinBlock,
+  getPinStatus,
+  isValidPin,
+  signingSchemeFor,
+  verifyPin,
+  WEB_EID_TOKEN_FORMAT,
+  DEFAULT_APP_VERSION,
+  MIN_NONCE_LENGTH,
+  MAX_NONCE_LENGTH,
+  PIN_MIN_LENGTH,
+  PIN_MAX_LENGTH,
+  KEY_REFERENCE,
+  ALGORITHM_REFERENCE,
+} from "./auth";
+export type { AuthAlgorithm, AuthenticateOptions, CardRunner, EidAuthToken, PinProvider, PinRequest, PinStatus, SigningScheme } from "./auth";
+export { certificatePublicKey, trimDer, readDer, derChildren } from "./der";
+export type { DerNode, PublicKeyInfo } from "./der";

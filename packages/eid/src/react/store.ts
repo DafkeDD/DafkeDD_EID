@@ -64,6 +64,11 @@ export class EidStore {
   readonly #readInsertions = new Map<string, number>();
   #reading: AbortController | undefined;
 
+  /** De client (bv. voor aanmelden met useEidLogin). */
+  get client(): EidClientLike {
+    return this.#client;
+  }
+
   constructor(options: EidStoreOptions) {
     this.#client = options.client;
     this.#autoRead = options.autoRead ?? true;

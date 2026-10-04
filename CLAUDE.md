@@ -60,6 +60,18 @@ de vereiste check voor `main`.
 - Nooit persoonsgegevens of PIN loggen, ook niet in debug-uitvoer.
 - Wijzigingen aan de bridge (`src/node/bridge.ts`): eerst [docs/beveiliging.md](docs/beveiliging.md) lezen;
   elke beveiligingsregel heeft een test in `tests/node/bridge.test.ts`.
+- Testpagina (`src/node/testpage.ts`): gewoon script zonder build, strikte CSP (geen inline script/style,
+  geen externe bronnen). Endpoints onder `/v1/test/` alleen voor de eigen pagina. Toont persoonsgegevens
+  alleen in de browser en standaard gemaskeerd.
+- Logboek (`src/node/logbook.ts`): nooit persoonsgegevens; tests in `bridge.test.ts` controleren dat.
+- Installeren (`src/node/install.ts`): alles via `InstallDeps`, tests in `tests/node/install.test.ts`
+  schrijven nooit buiten de neppe omgeving. Windows-starter is JScript (geen VBScript, dat wordt uitgefaseerd).
+- Het zelfstandige programma: `npm run build:exe` (Node 22/24, op het doelplatform); CI bouwt en test het
+  op Windows, macOS en Linux (job `exe`), en installeert/verwijdert het echt op Windows.
+- Aanmelden (`src/core/auth.ts`): PIN wordt TUSSEN kaartstappen gevraagd (Windows reset een kaart na 5 s
+  stilstand in een transactie). De ondertekende origin komt altijd uit de Origin-header, nooit uit de body.
+  PIN, PIN-blok en nonce nooit loggen of bewaren; tests in `bridge.test.ts` en `auth.test.ts` controleren dat.
+- Test-PKI: `scripts/make-test-pki.sh` (maakt `tests/fixtures/pki/` en `src/mock/test-pki.ts`). Alleen voor tests.
 - Het bridge-protocol staat in `src/core/protocol.ts` (`PROTOCOL_VERSION`). Een brekende wijziging = versie omhoog.
 - Zichtbare UI hoort niet in deze repo maar in de DafkeDD UI-registry (`DafkeDD/DafkeDD_UI`).
 - Regeleindes: LF (zie `.gitattributes`). Code-commentaar en docs: Nederlands.

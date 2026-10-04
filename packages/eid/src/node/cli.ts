@@ -1,6 +1,8 @@
 /**
- * `dafke-eid` — commando's rond de kaartlezer.
- * Fase 3: `readers` en `read` (handig om een lezer te testen). De bridge-server komt in fase 4.
+ * `dafke-eid` — de bridge en commando's rond de kaartlezer.
+ *
+ * Zonder commando: `serve`. Uitzondering: het zelfstandige programma (dafke-eid.exe) dat NIET
+ * vanuit de installatiemap draait, installeert zichzelf (dubbelklikken = installeren).
  */
 import { EidError, formatPartialDate, checkNationalNumber, DEFAULT_BRIDGE_PORT, DEFAULT_ORIGINS, type EidCardData } from "../core";
 import { createSampleCard } from "../mock";
@@ -11,6 +13,11 @@ import { createNativeBackend } from "./pcsc/native";
 import { diagnose } from "./diagnose";
 import { startBridge, type Bridge } from "./bridge";
 import type { PcscBackend } from "./pcsc/backend";
+import { configFromEnv, readConfigFile, resolveConfig, type BridgeConfig } from "./config";
+import { install, uninstall, openInBrowser, defaultInstallDeps, type InstallResult, type UninstallResult } from "./install";
+import { Logbook } from "./logbook";
+import { appDir, embeddedConfig, isSea, runningInstalled } from "./runtime";
+import { join } from "node:path";
 
 export const HELP = `dafke-eid ${VERSION}
 
@@ -21,16 +28,28 @@ Gebruik:
 
 Commando's:
   serve                 Start de bridge (standaard, ook zonder commando)
+  test                  Open de testpagina van de draaiende bridge in je browser
   readers               Toon de kaartlezers en of er een kaart in zit
   read                  Lees de eID in (persoonsgegevens worden gemaskeerd)
   diag                  Toon de ruwe PC/SC-toestand (zonder persoonsgegevens)
+  install               Installeer voor deze gebruiker, met autostart en snelkoppeling
+  uninstall             Verwijder de installatie
 
 Opties voor serve:
   --port <poort>        Poort op 127.0.0.1 (standaard ${DEFAULT_BRIDGE_PORT}, of DAFKE_EID_PORT)
   --origin <patroon>    Toegelaten website, mag meermaals of met komma's
                         (standaard ${DEFAULT_ORIGINS.join(", ")}, of DAFKE_EID_ORIGINS)
                         Voorbeelden: https://app.voorbeeld.be, https://*.voorbeeld.be
+  --auth-origin <patr.> Website die mag AANMELDEN met PIN (aparte lijst, standaard geen;
+                        of DAFKE_EID_AUTH_ORIGINS). Mag meermaals of met komma's
   --token <geheim>      Elke aanvraag moet dit token meesturen (of DAFKE_EID_TOKEN)
+  --no-testpage         Geen testpagina op http://127.0.0.1:<poort>/ (of DAFKE_EID_TESTPAGE=0)
+  --log-file <pad>      Schrijf het logboek (zonder persoonsgegevens) naar dit bestand
+  --config <pad>        Lees instellingen uit dit JSON-bestand
+
+Opties voor install / uninstall:
+  --port, --origin, --auth-origin, --token, --no-testpage   Bewaard in config.json
+  --silent              Geen browser openen, niet wachten (voor IT-uitrol)
 
 Opties voor read:
   --reader <naam>       Gebruik deze kaartlezer (standaard: de eerste met een kaart)
@@ -51,11 +70,37 @@ export interface CliResult {
   stderr: string;
   /** Alleen bij `serve`: de draaiende bridge (stoppen met stop()). */
   server?: { bridge: Bridge; stop(): Promise<void> };
+  /** Zo lang wachten voor het venster sluit (dubbelklik-installatie). */
+  holdMs?: number;
 }
 
+/** Alles wat het systeem raakt, vervangbaar in tests. */
+export interface SystemDeps {
+  isSea(): boolean;
+  runningInstalled(): boolean;
+  appDir(): string;
+  embedded(): BridgeConfig;
+  install(config: BridgeConfig, embedded: BridgeConfig): Promise<InstallResult>;
+  uninstall(): Promise<UninstallResult>;
+  isRunning(port: number): Promise<boolean>;
+  openUrl(url: string): void;
+}
+
+export const defaultSystem: SystemDeps = {
+  isSea,
+  runningInstalled: () => runningInstalled(),
+  appDir: () => appDir(),
+  embedded: embeddedConfig,
+  install: (config, embedded) => install({ config, embedded }),
+  uninstall: () => uninstall(),
+  isRunning: (port) => defaultInstallDeps().isRunning(port),
+  openUrl: (url) => openInBrowser(url),
+};
+
 export interface CliDeps {
-  createReader(options: { mock: boolean; debug?: boolean }): Promise<EidReader>;
+  createReader(options: { mock: boolean; debug?: boolean; onError?: (error: unknown) => void }): Promise<EidReader>;
   createBackend?(options: { mock: boolean }): Promise<PcscBackend>;
+  system?: Partial<SystemDeps>;
 }
 
 export const MOCK_READER_NAME = "DafkeDD Virtuele Lezer";
@@ -70,9 +115,12 @@ export const defaultDeps: CliDeps = {
   async createBackend({ mock }) {
     return mock ? mockBackend() : createNativeBackend();
   },
-  async createReader({ mock, debug = false }) {
-    const onError = debug ? (error: unknown) => process.stderr.write(`[debug] ${error instanceof Error ? error.message : String(error)}\n`) : undefined;
-    if (!mock) return createEidReader(onError ? { onError } : {});
+  async createReader({ mock, debug = false, onError: extra }) {
+    const onError = (error: unknown) => {
+      extra?.(error);
+      if (debug) process.stderr.write(`[debug] ${error instanceof Error ? error.message : String(error)}\n`);
+    };
+    if (!mock) return createEidReader({ onError });
     return createEidReader({ backend: await mockBackend() });
   },
 };
@@ -87,13 +135,18 @@ interface ParsedArgs {
   debug: boolean;
   port: number | undefined;
   origins: string[];
+  authOrigins: string[];
   token: string | undefined;
+  testpage: boolean | undefined;
+  logFile: string | undefined;
+  configFile: string | undefined;
+  silent: boolean;
   version: boolean;
   help: boolean;
 }
 
 function parseArgs(argv: readonly string[]): ParsedArgs | string {
-  const args: ParsedArgs = { command: undefined, reader: undefined, full: false, json: false, photo: true, mock: false, debug: false, port: undefined, origins: [], token: undefined, version: false, help: false };
+  const args: ParsedArgs = { command: undefined, reader: undefined, full: false, json: false, photo: true, mock: false, debug: false, port: undefined, origins: [], authOrigins: [], token: undefined, testpage: undefined, logFile: undefined, configFile: undefined, silent: false, version: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     switch (arg) {
@@ -120,6 +173,20 @@ function parseArgs(argv: readonly string[]): ParsedArgs | string {
       case "--debug":
         args.debug = true;
         break;
+      case "--no-testpage":
+        args.testpage = false;
+        break;
+      case "--silent":
+        args.silent = true;
+        break;
+      case "--log-file":
+      case "--config": {
+        const value = argv[++i];
+        if (value === undefined || value.startsWith("--")) return `${arg} verwacht een pad`;
+        if (arg === "--log-file") args.logFile = value;
+        else args.configFile = value;
+        break;
+      }
       case "--reader": {
         const value = argv[++i];
         if (value === undefined || value.startsWith("--")) return "--reader verwacht een naam";
@@ -133,10 +200,11 @@ function parseArgs(argv: readonly string[]): ParsedArgs | string {
         args.port = port;
         break;
       }
-      case "--origin": {
+      case "--origin":
+      case "--auth-origin": {
         const value = argv[++i];
-        if (value === undefined || value.startsWith("--")) return "--origin verwacht een patroon";
-        args.origins.push(...value.split(",").map((o) => o.trim()).filter(Boolean));
+        if (value === undefined || value.startsWith("--")) return `${arg} verwacht een patroon`;
+        (arg === "--origin" ? args.origins : args.authOrigins).push(...value.split(",").map((o) => o.trim()).filter(Boolean));
         break;
       }
       case "--token": {
@@ -210,32 +278,61 @@ function errorResult(error: unknown): CliResult {
   return { code: 2, stdout: "", stderr: `Onverwachte fout: ${error instanceof Error ? error.message : String(error)}\n` };
 }
 
-async function serve(args: ParsedArgs, deps: CliDeps, env: Record<string, string | undefined>): Promise<CliResult> {
-  const envPort = env.DAFKE_EID_PORT ? Number(env.DAFKE_EID_PORT) : undefined;
-  if (envPort !== undefined && (!Number.isInteger(envPort) || envPort < 0 || envPort > 65535)) {
-    return { code: 1, stdout: "", stderr: "DAFKE_EID_PORT is geen geldige poort\n" };
-  }
-  const port = args.port ?? envPort ?? DEFAULT_BRIDGE_PORT;
-  const envOrigins = (env.DAFKE_EID_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
-  const origins = args.origins.length > 0 ? args.origins : envOrigins.length > 0 ? envOrigins : [...DEFAULT_ORIGINS];
-  const token = args.token ?? (env.DAFKE_EID_TOKEN || undefined);
+/** Instellingen uit de opties op de opdrachtregel (alleen wat opgegeven werd). */
+function configFromArgs(args: ParsedArgs): BridgeConfig {
+  return {
+    ...(args.port !== undefined ? { port: args.port } : {}),
+    ...(args.origins.length > 0 ? { origins: args.origins } : {}),
+    ...(args.authOrigins.length > 0 ? { authOrigins: args.authOrigins } : {}),
+    ...(args.token !== undefined ? { token: args.token } : {}),
+    ...(args.testpage !== undefined ? { testpage: args.testpage } : {}),
+  };
+}
 
+function systemOf(deps: CliDeps): SystemDeps {
+  return { ...defaultSystem, ...deps.system };
+}
+
+/** Alle lagen samen: opdrachtregel > omgeving > config.json > ingebakken > standaard. */
+function loadConfig(args: ParsedArgs, env: Record<string, string | undefined>, sys: SystemDeps) {
+  const installed = sys.isSea() && sys.runningInstalled();
+  const configPath = args.configFile ?? (installed ? join(sys.appDir(), "config.json") : undefined);
+  const file = configPath ? readConfigFile(configPath) : undefined;
+  const config = resolveConfig(configFromArgs(args), configFromEnv(env), file, sys.embedded());
+  const logFile = args.logFile ?? (installed ? join(sys.appDir(), "dafke-eid.log") : undefined);
+  return { config, logFile };
+}
+
+async function serve(args: ParsedArgs, deps: CliDeps, env: Record<string, string | undefined>): Promise<CliResult> {
+  const sys = systemOf(deps);
   let reader: EidReader | undefined;
   try {
-    reader = await deps.createReader({ mock: args.mock, debug: args.debug });
+    const { config, logFile } = loadConfig(args, env, sys);
+    const logbook = new Logbook(logFile ? { file: logFile } : {});
+    reader = await deps.createReader({
+      mock: args.mock,
+      debug: args.debug,
+      onError: (error) => logbook.error(`Kaartlezer: ${error instanceof Error ? error.message : String(error)}`),
+    });
     const bridge = await startBridge({
       reader,
-      port,
-      origins,
-      ...(token ? { token } : {}),
+      port: config.port,
+      origins: config.origins,
+      authOrigins: config.authOrigins,
+      testpage: config.testpage,
+      logbook,
+      ...(config.token ? { token: config.token } : {}),
       ...(args.debug ? { onRequest: (r) => process.stderr.write(`[debug] ${r.method} ${r.path} ${r.status} ${r.ms}ms\n`) } : {}),
     });
     const opened = reader;
     const readers = opened.readers();
     const stdout =
       `dafke-eid ${VERSION} luistert op ${bridge.url}${args.mock ? " (virtuele lezer)" : ""}\n` +
-      `Toegelaten websites: ${origins.join(", ")}\n` +
-      (token ? "Token: vereist\n" : "") +
+      `Toegelaten websites: ${config.origins.join(", ")}\n` +
+      (config.authOrigins.length > 0 ? `Aanmelden met PIN: ${config.authOrigins.join(", ")}\n` : "") +
+      (config.token ? "Token: vereist\n" : "") +
+      (config.testpage ? `Testpagina: ${bridge.url}/\n` : "") +
+      (logFile ? `Logbestand: ${logFile}\n` : "") +
       `Kaartlezers: ${readers.map((r) => r.name).join(", ") || "(nog geen)"}\n` +
       "Stoppen met Ctrl+C.\n";
     return {
@@ -256,6 +353,60 @@ async function serve(args: ParsedArgs, deps: CliDeps, env: Record<string, string
   }
 }
 
+async function installCommand(args: ParsedArgs, deps: CliDeps, interactive: boolean): Promise<CliResult> {
+  const sys = systemOf(deps);
+  try {
+    const result = await sys.install(configFromArgs(args), sys.embedded());
+    let stdout =
+      `${result.upgraded ? "DafkeDD eID bijgewerkt" : "DafkeDD eID geïnstalleerd"} (versie ${VERSION})\n` +
+      `  Map:        ${result.paths.dir}\n` +
+      `  Autostart:  aan (start mee met je computer)\n` +
+      `  Testpagina: ${result.url}  (snelkoppeling "DafkeDD eID testen")\n`;
+    if (!result.running) {
+      return { code: 2, stdout, stderr: "Het programma is geïnstalleerd maar antwoordt (nog) niet. Kijk in het logbestand of open de testpagina later opnieuw.\n" };
+    }
+    stdout += "  Status:     draait\n";
+    if (!args.silent) {
+      sys.openUrl(result.url);
+      stdout += "\nDe testpagina wordt geopend in je browser.\n";
+      if (interactive) stdout += "Dit venster sluit vanzelf.\n";
+    }
+    return { code: 0, stdout, stderr: "", ...(interactive && !args.silent ? { holdMs: 8000 } : {}) };
+  } catch (error) {
+    return { ...errorResult(error), ...(interactive ? { holdMs: 30_000 } : {}) };
+  }
+}
+
+async function uninstallCommand(deps: CliDeps): Promise<CliResult> {
+  const sys = systemOf(deps);
+  try {
+    const result = await sys.uninstall();
+    return {
+      code: 0,
+      stdout: `DafkeDD eID verwijderd uit ${result.paths.dir}${result.deferred ? " (de map verdwijnt binnen enkele seconden)" : ""}.\n`,
+      stderr: "",
+    };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
+async function testCommand(args: ParsedArgs, deps: CliDeps, env: Record<string, string | undefined>): Promise<CliResult> {
+  const sys = systemOf(deps);
+  try {
+    const { config } = loadConfig(args, env, sys);
+    const url = `http://127.0.0.1:${config.port}/`;
+    if (!(await sys.isRunning(config.port))) {
+      return { code: 1, stdout: "", stderr: `dafke-eid draait niet op ${url}. Start het programma (of installeer het) en probeer opnieuw.\n` };
+    }
+    if (!config.testpage) return { code: 1, stdout: "", stderr: "De testpagina staat uit (--no-testpage).\n" };
+    sys.openUrl(url);
+    return { code: 0, stdout: `Testpagina geopend: ${url}\n`, stderr: "" };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
 export async function runCli(
   argv: readonly string[],
   deps: CliDeps = defaultDeps,
@@ -266,7 +417,16 @@ export async function runCli(
   if (args.version) return { code: 0, stdout: `${VERSION}\n`, stderr: "" };
   if (args.help) return { code: 0, stdout: HELP, stderr: "" };
 
-  if (args.command === undefined || args.command === "serve") return serve(args, deps, env);
+  if (args.command === undefined) {
+    const sys = systemOf(deps);
+    // Dubbelklikken op het gedownloade programma = installeren.
+    if (sys.isSea() && !sys.runningInstalled() && !args.mock) return installCommand(args, deps, true);
+    return serve(args, deps, env);
+  }
+  if (args.command === "serve") return serve(args, deps, env);
+  if (args.command === "install") return installCommand(args, deps, false);
+  if (args.command === "uninstall") return uninstallCommand(deps);
+  if (args.command === "test") return testCommand(args, deps, env);
 
   if (args.command === "diag") {
     const create = deps.createBackend ?? defaultDeps.createBackend!;
@@ -308,6 +468,8 @@ export async function runCli(
 }
 
 function isMain(): boolean {
+  // Het zelfstandige programma heeft altijd dit bestand als ingang, ongeacht de bestandsnaam.
+  if (isSea()) return true;
   const entry = process.argv[1];
   if (!entry) return false;
   return /(?:^|[\\/])(?:cli\.(?:js|ts)|dafke-eid(?:\.exe|\.cmd)?)$/.test(entry);
@@ -318,6 +480,7 @@ if (isMain()) {
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);
     process.exitCode = result.code;
+    if (result.holdMs) setTimeout(() => process.exit(result.code), result.holdMs);
     const server = result.server;
     if (server) {
       const shutdown = () => {
