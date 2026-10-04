@@ -6,14 +6,21 @@ Je hebt geen administratorrechten nodig.
 
 ## Windows
 
-1. Download `dafke-eid-windows-x64.exe`.
-2. Dubbelklik erop. Een venster meldt "DafkeDD eID geïnstalleerd" en de **testpagina** opent in je browser.
+1. Download **`dafke-eid-setup-windows-x64.exe`** (de setup).
+2. Dubbelklik erop. De setup installeert DafkeDD eID en start het meteen; vink **Testpagina openen**
+   aan om te zien of je kaartlezer werkt.
 3. Klaar. Het programma start voortaan vanzelf mee met Windows, zonder venster.
 
-Zolang het programma niet digitaal ondertekend is, toont Windows "Windows heeft uw pc beschermd".
+Je hebt geen administratorrechten nodig. Een nieuwe versie installeer je op dezelfde manier: je
+instellingen blijven bewaard.
+
+Zolang de setup niet digitaal ondertekend is, toont Windows "Windows heeft uw pc beschermd".
 Kies **Meer info → Toch uitvoeren**.
 
 Het staat daarna in **Instellingen → Apps → Geïnstalleerde apps** als "DafkeDD eID", met een knop **Verwijderen**.
+
+Liever zonder setup? Download `dafke-eid-windows-x64.exe` en dubbelklik erop: het programma
+installeert zichzelf op dezelfde plek, met hetzelfde resultaat.
 
 ## macOS
 
@@ -54,5 +61,5 @@ Support vraagt soms het **logbestand**: `%LOCALAPPDATA%\DafkeDD\eid\dafke-eid.lo
 
 ## Verwijderen
 
-- Windows: **Instellingen → Apps → DafkeDD eID → Verwijderen**.
+- Windows: **Instellingen → Apps → DafkeDD eID → Verwijderen** (geldt voor de setup én het losse programma).
 - Alle platformen: `dafke-eid uninstall` vanuit de installatiemap.

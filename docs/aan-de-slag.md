@@ -174,7 +174,7 @@ ander adres dan de website, zet dan CORS aan met `credentials: true` en roep `fe
 | `origin` op de server | Je echte adres, bv. `https://sso.jouwdomein.be` |
 | Gebruikers | Installeren het programma één keer: [installeren.md](installeren.md) |
 | Welke websites mogen | Bak ze in het programma: `npm run build:exe -- --origin https://app.jouwdomein.be --auth-origin https://sso.jouwdomein.be` ([uitrollen.md](uitrollen.md)) |
-| Programma ontbreekt of is te oud | `useEid().phase` is `no-bridge` of `bridge-outdated`: toon een downloadknop (`eid-status` in Dafke UI doet dat) |
+| Programma ontbreekt of is te oud | `useEid().phase` is `no-bridge` of `bridge-outdated`: toon een downloadknop (`eid-status` in Dafke UI doet dat). Vaste links naar de nieuwste versie: `https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-setup-windows-x64.exe` en `…/dafke-eid-macos-arm64` |
 | Meerdere servers | Gedeelde `NonceStore`, bv. Redis ([server.md](server.md#meerdere-servers-een-gedeelde-noncestore)) |
 | OCSP | Je server moet `http://ocsp.eidpki.belgium.be` en `http://ocsp.eid.belgium.be` kunnen bereiken; anders wordt elke aanmelding geweigerd (fail closed) |
 | Test-PKI | `EID_TEST_CARD` / `TEST_ROOT_CA` nooit in productie |

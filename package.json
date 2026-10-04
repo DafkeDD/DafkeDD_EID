@@ -23,6 +23,7 @@
     "version:minor": "node scripts/bump-version.mjs minor",
     "version:major": "node scripts/bump-version.mjs major",
     "build:exe": "node scripts/build-exe.mjs",
+    "build:setup": "node scripts/build-setup.mjs",
     "fetch-roots": "node scripts/fetch-belgium-roots.mjs",
     "test-pki": "bash scripts/make-test-pki.sh"
   },

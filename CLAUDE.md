@@ -54,6 +54,8 @@ de vereiste check voor `main`.
 - `examples/next-app`, `examples/nest-api` — voorbeelden voor gebruikers, **geen** workspaces. `docs/aan-de-slag.md`
   toont dezelfde code: pas ze samen aan. `npm run test:install` installeert ze met het ingepakte pakket en test de
   hele keten (CI-job `install`). Importeer daar alleen publieke subpaden (`@dafkedd/eid/...`).
+- `installer/dafke-eid.iss` — Windows-setup (Inno Setup, `npm run build:setup`). Bewaar als UTF-8 mét BOM en verander
+  de `AppId` nooit. De setup roept `dafke-eid install --from-setup` en `uninstall --keep-files` aan (`tests/node/setup.test.ts`).
 - `packages/eid` — het pakket `@dafkedd/eid` (subpaden: `.`, `/node`, `/react`, `/server`, `/nestjs`, `/mock`).
   Nieuw subpad = entry in `tsup.config.ts` **én** in `exports` van package.json.
 - `src/core`, `src/react`, `src/mock` draaien ook in de browser: geen `node:`-imports, geen `Buffer`, geen `process`.
