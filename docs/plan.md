@@ -131,7 +131,10 @@ Nog te schrijven:
 - Nog open uit fase 3: test met echte kaart op een Mac.
 - Fase 6: **code klaar** — `authenticate()` (PIN-status veilig, VERIFY, MSE/PSO, ES384 en RS256, `web-eid:1.0`), `POST /v1/authenticate` met aparte `authOrigins`, `useEidLogin()`, `MockEidClient.authenticate`, "Test aanmelden" op de testpagina (controleert de handtekening in de browser), test-PKI. PIN in de website (keuze A); eigen PIN-venster en pinpad later.
 - Nog open uit fase 6: aanmelden testen met een echte kaart (`$env:EID_TEST_PIN` + `npm run test:integration`, of "Test aanmelden" op de testpagina).
-- Volgende: fase 7 (`/server` + `/nestjs`).
+- Fase 7: **code klaar** — `verifyEidToken`/`EidAuthenticator` (nonce, handtekening, keten met AIA, OCSP fail closed met eigen DER-encoder, getest tegen `openssl ocsp`), `MemoryNonceStore` + Redis-voorbeeld, `EidAuthModule` voor NestJS, end-to-end-test kaart → bridge → server.
+- Fase 7 **getest met een echte kaart** (applet 1.8, nieuwe PKI): PIN → ES384-token → keten tot Belgium Root CA6 → echte OCSP van de overheid. Roots CA3, CA4 en CA6 opgehaald met `npm run fetch-roots` (CA6-vingerafdruk gelijk aan de root op de kaart).
+- Nog open: onbekend identiteitsveld `0x1a` op nieuwe kaarten uitzoeken (blijft bewaard in `unknownFields`).
+- Volgende: fase 8 (DafkeDD UI-componenten).
 
 ## Fasen
 

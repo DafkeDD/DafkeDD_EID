@@ -39,6 +39,7 @@ or `<EidProvider client={new MockEidClient()}>` from `@dafkedd/eid/mock` without
 | `@dafkedd/eid/react` | browser | `EidProvider`, `useEid`, `useEidLogin` (PIN login), `EidReader`, `EidClient`, formatters |
 | `@dafkedd/eid/node` | Node | PC/SC (koffi), `createEidReader`, `startBridge`; command `dafke-eid` |
 | `@dafkedd/eid/mock` | everywhere | `VirtualCard`, `MockEidClient` |
-| `@dafkedd/eid/server`, `/nestjs` | Node | token validation (coming) |
+| `@dafkedd/eid/server` | Node | `EidAuthenticator`, `verifyEidToken`: signature, chain to Belgium Root CA, OCSP |
+| `@dafkedd/eid/nestjs` | Node | `EidAuthModule.forRoot()`, `EidAuthService` |
 
 Documentation (Dutch): https://github.com/DafkeDD/DafkeDD_EID/tree/main/docs

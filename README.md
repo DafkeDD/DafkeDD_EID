@@ -2,7 +2,7 @@
 
 Read Belgian eID cards in hosted Next.js/React apps, with optional PIN authentication and a NestJS module for the backend. Works on Windows and macOS.
 
-> Status: phase 6. Reading works, the end-user program installs itself, and PIN login (`useEidLogin`, Web eID token) works for websites in `authOrigins`. Server-side token validation (`/server`, `/nestjs`) follows in phase 7. See [docs/plan.md](docs/plan.md).
+> Status: phase 7. Reading, the end-user program, PIN login and server-side validation (`/server`, `/nestjs`: signature, chain to Belgium Root CA, OCSP) all work. Next: the DafkeDD UI components (phase 8). See [docs/plan.md](docs/plan.md).
 
 ## How it works
 
@@ -68,6 +68,18 @@ For your own login/SSO website only: start the bridge with `--auth-origin https:
 let your server create a nonce, ask the PIN in your own dialog and call
 `useEidLogin().login({ nonce, pin })`. You get a Web eID token (`web-eid:1.0`) for your server.
 Details (Dutch): [docs/bridge.md](docs/bridge.md#aanmelden-met-pin).
+
+On your server (Node, Next.js or NestJS):
+
+```ts
+import { EidAuthenticator } from "@dafkedd/eid/server"; // or EidAuthModule from "@dafkedd/eid/nestjs"
+const eid = new EidAuthenticator({ origin: "https://sso.example.be" });
+const { nonce } = await eid.createChallenge();
+const who = await eid.verify(token, nonce); // nationalNumber, firstNames, lastName, …
+```
+
+It checks the signature over your origin and nonce, the chain to Belgium Root CA and OCSP (fail
+closed). Run `npm run fetch-roots` once to add the Belgian roots. Dutch docs: [docs/server.md](docs/server.md).
 
 ## Program for end users
 

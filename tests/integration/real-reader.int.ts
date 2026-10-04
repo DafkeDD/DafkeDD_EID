@@ -95,5 +95,46 @@ describe.runIf(Boolean(process.env.EID_TEST_PIN))("echte eID: aanmelden met PIN"
     const key = token.algorithm.startsWith("ES") ? { key: cert.publicKey, dsaEncoding: "ieee-p1363" as const } : cert.publicKey;
     expect(verify(hash, signed, key, Buffer.from(token.signature, "base64"))).toBe(true);
     console.log(`Aanmelden gelukt: ${token.algorithm}, certificaat-uitgever: ${cert.issuer.split("\n").find((l) => l.startsWith("CN="))}`);
+
+    // Volledige servercontrole met de echte Belgische roots en de echte OCSP-responder.
+    const { BELGIUM_ROOT_CAS, verifyEidToken } = await import("../../packages/eid/src/server");
+    if (BELGIUM_ROOT_CAS.length === 0) {
+      console.log("Servercontrole overgeslagen: draai eerst `npm run fetch-roots`.");
+      return;
+    }
+    let who;
+    try {
+      who = await verifyEidToken({ token, origin, nonce });
+    } catch (error) {
+      // Diagnose (geen persoonsgegevens): welke keten heeft deze kaart, en kennen wij die root?
+      const { X509Certificate: X509 } = await import("node:crypto");
+      const cn = (dn: string) => dn.split("\n").find((l) => l.startsWith("CN=")) ?? dn;
+      console.log("\n--- Diagnose keten ---");
+      console.log(`Authenticatiecertificaat: uitgever ${cn(cert.issuer)}`);
+      console.log(`  AIA: ${(cert.infoAccess ?? "(geen)").replace(/\n/g, " | ")}`);
+      const { certificates } = await reader.read(readerName, { photo: false, certificates: true });
+      const ca = new X509(Buffer.from(certificates!.ca));
+      const root = new X509(Buffer.from(certificates!.root));
+      console.log(`CA op de kaart:   ${cn(ca.subject)} (uitgever ${cn(ca.issuer)}), geldig tot ${ca.validTo}`);
+      console.log(`  heeft auth-cert uitgegeven: ${cert.checkIssued(ca) && cert.verify(ca.publicKey)}`);
+      console.log(`Root op de kaart: ${cn(root.subject)}, SHA-256 ${root.fingerprint256}`);
+      console.log(`  heeft CA uitgegeven: ${ca.checkIssued(root) && ca.verify(root.publicKey)}`);
+      for (const pem of BELGIUM_ROOT_CAS) {
+        const known = new X509(pem);
+        console.log(`Gekende root:     ${cn(known.subject)}, SHA-256 ${known.fingerprint256}, zelfde als kaart: ${known.fingerprint256 === root.fingerprint256}`);
+      }
+      const aia = /CA Issuers - URI:(\S+)/.exec(cert.infoAccess ?? "")?.[1];
+      if (aia) {
+        try {
+          const res = await fetch(aia, { signal: AbortSignal.timeout(5000) });
+          console.log(`AIA ophalen (${aia}): HTTP ${res.status}, ${(await res.arrayBuffer()).byteLength} bytes`);
+        } catch (e) {
+          console.log(`AIA ophalen (${aia}) mislukt: ${e instanceof Error ? e.message : e}`);
+        }
+      }
+      throw error;
+    }
+    expect(who.nationalNumber).toMatch(/^\d{11}$/);
+    console.log(`Servercontrole gelukt (keten + OCSP): rijksregisternummer ${who.nationalNumber.slice(0, 6)}-***-**`);
   });
 });

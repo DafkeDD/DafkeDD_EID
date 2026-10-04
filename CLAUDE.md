@@ -71,6 +71,10 @@ de vereiste check voor `main`.
 - Aanmelden (`src/core/auth.ts`): PIN wordt TUSSEN kaartstappen gevraagd (Windows reset een kaart na 5 s
   stilstand in een transactie). De ondertekende origin komt altijd uit de Origin-header, nooit uit de body.
   PIN, PIN-blok en nonce nooit loggen of bewaren; tests in `bridge.test.ts` en `auth.test.ts` controleren dat.
+- Server (`src/server`): fail closed. Elke controle heeft een negatieve test (`tests/server`). OCSP en de
+  DER-encoder worden getest tegen `openssl ocsp` (tests slaan over zonder openssl). Geen afhankelijkheden.
+- NestJS (`src/nestjs`): alleen type-imports van `@nestjs/common`, geen decorators.
+- Belgische roots: `npm run fetch-roots` (vingerafdrukken controleren!), nooit met de hand.
 - Test-PKI: `scripts/make-test-pki.sh` (maakt `tests/fixtures/pki/` en `src/mock/test-pki.ts`). Alleen voor tests.
 - Het bridge-protocol staat in `src/core/protocol.ts` (`PROTOCOL_VERSION`). Een brekende wijziging = versie omhoog.
 - Zichtbare UI hoort niet in deze repo maar in de DafkeDD UI-registry (`DafkeDD/DafkeDD_UI`).

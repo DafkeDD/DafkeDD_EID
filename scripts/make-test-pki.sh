@@ -30,6 +30,12 @@ keyUsage = critical, digitalSignature
 extendedKeyUsage = clientAuth
 certificatePolicies = 2.16.56.12.1.1.2.2
 authorityKeyIdentifier = keyid
+authorityInfoAccess = OCSP;URI:http://ocsp.test.invalid,caIssuers;URI:http://certs.test.invalid/citizen-ca.crt
+[v3_ocsp]
+basicConstraints = critical, CA:false
+keyUsage = critical, digitalSignature
+extendedKeyUsage = OCSPSigning
+authorityKeyIdentifier = keyid
 CNF
 
 SUBJ='/C=BE/CN=Jan Specimen (Authentication)/SN=Specimen/GN=Jan Pieter/serialNumber=85031512369'
@@ -47,6 +53,11 @@ openssl genrsa -out auth-rsa.key.pem 2048 2>/dev/null
 openssl req -new -key auth-rsa.key.pem -out auth-rsa.csr -subj "$SUBJ" 2>/dev/null
 openssl x509 -req -in auth-rsa.csr -CA citizen-ca.pem -CAkey citizen-ca.key.pem -CAcreateserial -out auth-rsa.pem -days 3650 -extfile ext.cnf -extensions v3_auth 2>/dev/null
 
+# OCSP-responder (gedelegeerd, met EKU OCSPSigning), zoals bij de echte eID.
+openssl genrsa -out ocsp.key.pem 2048 2>/dev/null
+openssl req -new -key ocsp.key.pem -out ocsp.csr -subj '/C=BE/CN=DafkeDD TEST OCSP Responder' 2>/dev/null
+openssl x509 -req -in ocsp.csr -CA citizen-ca.pem -CAkey citizen-ca.key.pem -CAcreateserial -out ocsp.pem -days 3650 -extfile ext.cnf -extensions v3_ocsp 2>/dev/null
+
 openssl ecparam -name secp384r1 -genkey -noout -out auth-revoked.key.pem
 openssl req -new -key auth-revoked.key.pem -out auth-revoked.csr -subj '/C=BE/CN=Ingetrokken Specimen (Authentication)/serialNumber=05061224655' 2>/dev/null
 openssl x509 -req -in auth-revoked.csr -CA citizen-ca.pem -CAkey citizen-ca.key.pem -CAcreateserial -out auth-revoked.pem -days 3650 -extfile ext.cnf -extensions v3_auth 2>/dev/null
@@ -56,6 +67,21 @@ openssl req -x509 -new -newkey rsa:2048 -nodes -keyout rogue-root.key.pem -out r
 openssl ecparam -name secp384r1 -genkey -noout -out auth-rogue.key.pem
 openssl req -new -key auth-rogue.key.pem -out auth-rogue.csr -subj "$SUBJ" 2>/dev/null
 openssl x509 -req -in auth-rogue.csr -CA rogue-root.pem -CAkey rogue-root.key.pem -CAcreateserial -out auth-rogue.pem -days 3650 -extfile ext.cnf -extensions v3_auth 2>/dev/null
+
+# OCSP-database voor `openssl ocsp -index` (in de tests): alles geldig, behalve auth-revoked.
+: > index.txt
+for name in auth-ec auth-rsa auth-revoked; do
+  serial=$(openssl x509 -in $name.pem -noout -serial | cut -d= -f2)
+  subject=$(openssl x509 -in $name.pem -noout -subject -nameopt compat | sed 's/^subject=//')
+  if [ "$name" = auth-revoked ]; then
+    printf 'R\t351231235959Z\t250101000000Z\t%s\tunknown\t%s\n' "$serial" "$subject" >> index.txt
+  else
+    printf 'V\t351231235959Z\t\t%s\tunknown\t%s\n' "$serial" "$subject" >> index.txt
+  fi
+done
+
+# Twee certificaten met hetzelfde subject (EC en RSA, zoals één persoon met twee kaarten).
+echo "unique_subject = no" > index.txt.attr
 
 rm -f *.csr *.srl ext.cnf
 cd - >/dev/null
