@@ -74,6 +74,25 @@
     },
     "./package.json": "./package.json"
   },
+  "typesVersions": {
+    "*": {
+      "node": [
+        "./dist/node.d.ts"
+      ],
+      "react": [
+        "./dist/react.d.ts"
+      ],
+      "server": [
+        "./dist/server.d.ts"
+      ],
+      "nestjs": [
+        "./dist/nestjs.d.ts"
+      ],
+      "mock": [
+        "./dist/mock.d.ts"
+      ]
+    }
+  },
   "files": [
     "dist"
   ],

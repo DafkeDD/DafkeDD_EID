@@ -135,7 +135,9 @@ Nog te schrijven:
 - Fase 7 **getest met een echte kaart** (applet 1.8, nieuwe PKI): PIN → ES384-token → keten tot Belgium Root CA6 → echte OCSP van de overheid. Roots CA3, CA4 en CA6 opgehaald met `npm run fetch-roots` (CA6-vingerafdruk gelijk aan de root op de kaart).
 - Nog open: onbekend identiteitsveld `0x1a` op nieuwe kaarten uitzoeken (blijft bewaard in `unknownFields`).
 - Fase 8: **klaar** in de Dafke-UI-repo — `eid-status` (fases, downloadknoppen voor Windows/macOS, "bijwerken"), `eid-card` (gevoelige velden standaard afgeschermd, foto vervaagd), `eid-pin-dialog` (PIN wordt na versturen gewist, resterende pogingen, niet sluitbaar tijdens ondertekenen) en `eid-reader-picker`. Props-gestuurd: Dafke UI hangt niet van `@dafkedd/eid` af. Categorie "eID" in de docs-site, 19 tests.
-- Volgende: fase 9 (installatietest + "Aan de slag in 5 minuten").
+- Fase 9: **klaar** — `npm run test:install` pakt het pakket in (`npm pack`), installeert het in kopieën van `examples/next-app` (Next.js 16) en `examples/nest-api` (NestJS 12, ESM) buiten de repo, bouwt beide en test de keten website → nonce → programma (`--mock`) → token → server, plus weigeringen (verkeerde PIN, hergebruik, geen cookie, vreemde website). Draait in CI op Linux en Windows. Ook eenmalig met een echte browser (Chromium) getest: kaart lezen, verkeerde PIN, aanmelden. `docs/aan-de-slag.md` toegevoegd.
+- Gevonden en opgelost in fase 9: CommonJS-projecten met `moduleResolution: "node"` (bv. NestJS 10/11) vonden de types van de subpaden niet → `typesVersions` in package.json (met test).
+- Nog open (buiten de fasen): code signing, test op een echte Mac, downloadplek voor het programma, distributie npm-pakket (GitHub Packages of npm), identiteitsveld `0x1a`.
 
 ## Fasen
 

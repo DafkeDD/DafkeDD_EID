@@ -1,5 +1,7 @@
 # Aanmelden controleren op de server
 
+Snel starten: [aan-de-slag.md](aan-de-slag.md).
+
 `@dafkedd/eid/server` controleert het token dat de browser na het aanmelden met PIN krijgt
 (zie [bridge.md](bridge.md#aanmelden-met-pin)). Alleen Node, geen extra afhankelijkheden.
 
@@ -78,6 +80,10 @@ export class EidController {
 }
 ```
 
+`@Session()` vraagt `express-session`. Zonder sessies: zet de nonce in een httpOnly-cookie, zoals
+[`examples/nest-api`](../examples/nest-api/src/eid.controller.ts). Zet `@HttpCode(200)` op de
+login-route als je liever 200 dan 201 teruggeeft.
+
 De module gebruikt geen decorators en importeert NestJS niet zelf: `@nestjs/common` is een optionele
 peer-dependency.
 
@@ -102,7 +108,8 @@ new EidAuthenticator({ origin, nonceStore: redisNonceStore });
 
 ## Vertrouwde roots
 
-Standaard vertrouwt de server de Belgium Root CA's uit `BELGIUM_ROOT_CAS`. Die lijst vul je met:
+Standaard vertrouwt de server de Belgium Root CA's uit `BELGIUM_ROOT_CAS`. Die zitten in het
+gepubliceerde pakket; als gebruiker hoef je niets te doen. In deze repo vul je de lijst met:
 
 ```bash
 npm run fetch-roots   # downloadt van certs.eid.belgium.be en toont de SHA-256-vingerafdrukken

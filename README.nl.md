@@ -2,7 +2,7 @@
 
 Belgische eID-kaarten uitlezen in gehoste Next.js/React-apps, met optioneel aanmelden met PIN en een NestJS-module voor de backend. Werkt op Windows en macOS.
 
-> Status: fase 8. Lezen, het programma voor gebruikers, aanmelden met PIN, de controle op de server (`/server`, `/nestjs`: handtekening, keten tot Belgium Root CA, OCSP) en de componenten in Dafke UI werken. Volgende: installatietest in een leeg project (fase 9). Zie [docs/plan.md](docs/plan.md).
+> Status: fase 9. Lezen, het programma voor gebruikers, aanmelden met PIN, de controle op de server (`/server`, `/nestjs`: handtekening, keten tot Belgium Root CA, OCSP) en de componenten in Dafke UI werken, en een installatietest controleert het pakket in lege Next.js- en NestJS-projecten. Nog open: code signing, een test op een echte Mac en waar gebruikers het programma downloaden. Zie [docs/plan.md](docs/plan.md).
 
 ## Hoe het werkt
 
@@ -16,6 +16,16 @@ Een browser kan niet met een kaartlezer praten. Elke gebruiker draait daarom een
 | `@dafkedd/eid/server` | Node | token controleren |
 | `@dafkedd/eid/nestjs` | Node | NestJS-module |
 | `@dafkedd/eid/mock` | overal | virtuele kaart |
+
+## Aan de slag in 5 minuten
+
+```bash
+npm install @dafkedd/eid
+npx dafke-eid --mock --auth-origin http://localhost:3000   # virtuele kaart, PIN 1234
+```
+
+De kaart lezen in Next.js, aanmelden met PIN en het token controleren in Next.js of NestJS:
+[docs/aan-de-slag.md](docs/aan-de-slag.md), met werkende projecten in [examples/](examples).
 
 ## Een kaart uitlezen (virtuele kaart)
 
@@ -39,6 +49,7 @@ npm install
 npm run typecheck
 npm test
 npm run build
+npm run test:install   # installeert het ingepakte pakket in examples/ (Next.js + NestJS) en test de hele keten
 ```
 
 ## Testen met een echte kaartlezer

@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.mts",
+    "test:install": "node scripts/install-test.mjs",
     "check": "npm run typecheck && npm test && npm run build",
     "bridge": "node packages/eid/dist/cli.js serve",
     "bridge:mock": "node packages/eid/dist/cli.js serve --mock",

@@ -42,4 +42,6 @@ or `<EidProvider client={new MockEidClient()}>` from `@dafkedd/eid/mock` without
 | `@dafkedd/eid/server` | Node | `EidAuthenticator`, `verifyEidToken`: signature, chain to Belgium Root CA, OCSP |
 | `@dafkedd/eid/nestjs` | Node | `EidAuthModule.forRoot()`, `EidAuthService` |
 
+Five-minute quick start (Next.js + NestJS, Dutch): https://github.com/DafkeDD/DafkeDD_EID/blob/main/docs/aan-de-slag.md
+
 Documentation (Dutch): https://github.com/DafkeDD/DafkeDD_EID/tree/main/docs
