@@ -2,7 +2,7 @@
 
 Read Belgian eID cards in hosted Next.js/React apps, with optional PIN authentication and a NestJS module for the backend. Works on Windows and macOS.
 
-> Status: phase 7. Reading, the end-user program, PIN login and server-side validation (`/server`, `/nestjs`: signature, chain to Belgium Root CA, OCSP) all work. Next: the DafkeDD UI components (phase 8). See [docs/plan.md](docs/plan.md).
+> Status: phase 9. Reading, the end-user program, PIN login, server-side validation (`/server`, `/nestjs`: signature, chain to Belgium Root CA, OCSP) and the Dafke UI components all work, and an install test checks the package in fresh Next.js and NestJS projects. Still open: code signing, a real Mac test and where users download the program. See [docs/plan.md](docs/plan.md).
 
 ## How it works
 
@@ -16,6 +16,17 @@ A browser cannot talk to a card reader. Every user therefore runs a small local 
 | `@dafkedd/eid/server` | Node | token validation |
 | `@dafkedd/eid/nestjs` | Node | NestJS module |
 | `@dafkedd/eid/mock` | everywhere | virtual card |
+
+## Quick start
+
+```bash
+npm install @dafkedd/eid
+npx dafke-eid --mock --auth-origin http://localhost:3000   # virtual card, PIN 1234
+```
+
+Reading the card in Next.js, PIN login and checking the token in Next.js or NestJS take five
+minutes: [docs/aan-de-slag.md](docs/aan-de-slag.md) (Dutch), with working projects in
+[examples/](examples).
 
 ## Reading a card (virtual card)
 
@@ -39,6 +50,7 @@ npm install
 npm run typecheck
 npm test
 npm run build
+npm run test:install   # installs the packed package in examples/ (Next.js + NestJS) and tests the whole chain
 ```
 
 ## Testing with a real card reader
@@ -61,6 +73,23 @@ npm run playground        # http://localhost:3000  (without bridge: /?mock=1)
 
 See [docs/bridge.md](docs/bridge.md) for the protocol and React usage, and
 [docs/beveiliging.md](docs/beveiliging.md) for security (both Dutch).
+
+## Ready-made components (Dafke UI)
+
+[Dafke UI](https://github.com/DafkeDD/DafkeDD_UI) has four eID components: `eid-status`, `eid-card`,
+`eid-pin-dialog` and `eid-reader-picker` (`npx dafke-ui add eid-status eid-card`). They only take
+props, so you wire the hooks into them:
+
+```tsx
+const eid = useEid();
+<EidStatus phase={eid.phase} reader={eid.reader} error={eid.error} onRead={eid.read}
+  downloads={{ windows: "/downloads/dafke-eid-setup.exe", mac: "/downloads/dafke-eid-macos" }} />
+{eid.card && <EidCard identity={eid.card.identity} address={eid.card.address} photo={eid.card.photo} />}
+
+const auth = useEidLogin();
+<EidPinDialog open={open} onOpenChange={setOpen} onSubmit={(pin) => auth.login({ nonce, pin })}
+  status={auth.status} error={auth.error} triesLeft={auth.triesLeft} />
+```
 
 ## PIN login
 

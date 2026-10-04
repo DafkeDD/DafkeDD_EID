@@ -31,6 +31,13 @@ describe("pakketstructuur", () => {
     }
   });
 
+  // Oudere TypeScript-instellingen (moduleResolution "node", bv. NestJS 10) lezen `exports` niet.
+  it("heeft typesVersions voor elk subpad (moduleResolution node10)", () => {
+    const subpaths = Object.keys(pkg.exports).filter((key) => key !== "." && key !== "./package.json");
+    const expected = Object.fromEntries(subpaths.map((key) => [key.slice(2), [`./dist/${key.slice(2)}.d.ts`]]));
+    expect(pkg.typesVersions).toEqual({ "*": expected });
+  });
+
   it("heeft een bronbestand voor elke entry", () => {
     for (const source of Object.values(entries)) expect(existsSync(join("packages/eid", source))).toBe(true);
   });
@@ -73,6 +80,23 @@ describe("pakketstructuur", () => {
     expect(pkg.peerDependenciesMeta["@nestjs/common"].optional).toBe(true);
     expect(pkg.dependencies?.react).toBeUndefined();
     expect(pkg.dependencies?.["@nestjs/common"]).toBeUndefined();
+  });
+
+  it("gebruikt in examples/ en de quickstart alleen publieke subpaden", () => {
+    const allowed = new Set(Object.keys(pkg.exports).map((key) => (key === "." ? "@dafkedd/eid" : `@dafkedd/eid/${key.slice(2)}`)));
+    const files = [...walk("examples").filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes("node_modules")), "docs/aan-de-slag.md"];
+    for (const file of files) {
+      for (const [, spec] of readFileSync(file, "utf8").matchAll(/from\s+["'](@dafkedd\/eid[^"']*)["']/g)) {
+        expect(allowed.has(spec ?? ""), `${file}: ${spec}`).toBe(true);
+      }
+    }
+  });
+
+  it("houdt de voorbeelden op dezelfde versie als het pakket", () => {
+    for (const name of ["next-app", "nest-api"]) {
+      const example = JSON.parse(readFileSync(join("examples", name, "package.json"), "utf8"));
+      expect(example.dependencies["@dafkedd/eid"], name).toBe(`^${pkg.version}`);
+    }
   });
 
   it("heeft README in het Engels en Nederlands met dezelfde hoofdstukken", () => {

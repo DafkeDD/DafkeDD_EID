@@ -5,6 +5,7 @@ Het volledige plan staat in [docs/plan.md](docs/plan.md).
 
 ## Git-regels (belangrijk)
 
+- **Nooit Claude vermelden** in commits, pull requests of bestanden: geen `Co-Authored-By`, geen `Claude-Session`, geen "Generated with Claude Code".
 - **Push altijd naar `developer`.** Nooit rechtstreeks naar `main` committen of pushen.
 - Controleer vóór elke commit/push op welke branch je staat: `git branch --show-current`.
   Sta je op `main`, schakel dan eerst over: `git switch developer`.
@@ -50,6 +51,9 @@ de vereiste check voor `main`.
 ## Projectstructuur & conventies
 
 - `apps/playground` — Next.js-testpagina (`npm run playground`, zonder bridge: `/?mock=1`).
+- `examples/next-app`, `examples/nest-api` — voorbeelden voor gebruikers, **geen** workspaces. `docs/aan-de-slag.md`
+  toont dezelfde code: pas ze samen aan. `npm run test:install` installeert ze met het ingepakte pakket en test de
+  hele keten (CI-job `install`). Importeer daar alleen publieke subpaden (`@dafkedd/eid/...`).
 - `packages/eid` — het pakket `@dafkedd/eid` (subpaden: `.`, `/node`, `/react`, `/server`, `/nestjs`, `/mock`).
   Nieuw subpad = entry in `tsup.config.ts` **én** in `exports` van package.json.
 - `src/core`, `src/react`, `src/mock` draaien ook in de browser: geen `node:`-imports, geen `Buffer`, geen `process`.

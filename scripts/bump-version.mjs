@@ -28,6 +28,13 @@ for (const file of files) {
   writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
 }
 
+// De voorbeelden hangen af van de nieuwe versie (examples/ zijn geen workspaces).
+for (const file of ["examples/next-app/package.json", "examples/nest-api/package.json"]) {
+  const json = JSON.parse(readFileSync(file, "utf8"));
+  json.dependencies["@dafkedd/eid"] = `^${next}`;
+  writeFileSync(file, JSON.stringify(json, null, 2) + "\n");
+}
+
 // package-lock.json gericht bijwerken, zonder `npm install` (andere npm-versies herschrijven anders alles).
 const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
 lock.version = next;

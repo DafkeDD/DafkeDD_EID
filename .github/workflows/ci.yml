@@ -123,16 +123,37 @@ jobs:
           path: dist-bin/
           retention-days: 7
 
+  # Fase 9: het ingepakte pakket installeren in lege Next.js- en NestJS-projecten (examples/)
+  # en de hele keten testen: website → programma (virtuele kaart) → token → server.
+  install:
+    name: installatietest (${{ matrix.os }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:install
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
   # Eén vaste naam voor de ruleset op main ("CI-check"), ongeacht de matrix.
   ci-check:
     name: CI-check
-    needs: [test, exe]
+    needs: [test, exe, install]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Alle platformen groen?
         run: |
-          if [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.exe.result }}" != "success" ]; then
+          if [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.exe.result }}" != "success" ] || [ "${{ needs.install.result }}" != "success" ]; then
             echo "::error::Een of meer platformen faalden."
             exit 1
           fi
