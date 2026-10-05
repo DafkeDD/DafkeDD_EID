@@ -112,13 +112,24 @@ closed). Run `npm run fetch-roots` once to add the Belgian roots. Dutch docs: [d
 
 ## Program for end users
 
-Download from the GitHub release and double-click (Windows) — it installs itself in the user's
-profile (no admin rights), starts with the computer and opens the **test page** at
-http://127.0.0.1:47820/ (status, live readers, test read with masked data, diagnostics, log).
+Download links (always the **latest version**, handy for a download button):
+
+| Platform | Link |
+| --- | --- |
+| Windows setup (recommended) | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-setup-windows-x64.exe |
+| Windows, plain program | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-windows-x64.exe |
+| macOS Apple Silicon | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-arm64 |
+| macOS Intel | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-x64 |
+
+Windows: download `dafke-eid-setup-windows-x64.exe` from the GitHub release and run it (or the plain
+`dafke-eid-windows-x64.exe`, which installs itself). It installs in the user's profile (no admin
+rights), starts with the computer and opens the **test page** at http://127.0.0.1:47820/ (status,
+live readers, test read with masked data, diagnostics, log). Silent: `/VERYSILENT /ORIGINS=https://app.x.be`.
 
 ```bash
 npm run build:exe                               # build the program for this platform
 npm run build:exe -- --origin https://app.x.be  # with allowed websites baked in
+npm run build:setup                             # Windows setup (Inno Setup) around the program
 ```
 
 Dutch docs: [installeren.md](docs/installeren.md) (users), [uitrollen.md](docs/uitrollen.md) (IT),

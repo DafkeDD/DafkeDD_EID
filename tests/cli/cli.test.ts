@@ -175,13 +175,13 @@ describe("dafke-eid install / uninstall / test / dubbelklikken", () => {
       runningInstalled: () => false,
       appDir: () => "/x/DafkeDD/eid",
       embedded: () => ({ origins: ["https://ingebakken.be"] }),
-      install: async (config: object, embedded: object) => {
-        calls.push(`install ${JSON.stringify(config)} ${JSON.stringify(embedded)}`);
-        return { paths, url: "http://127.0.0.1:47820/", running: true, upgraded: false };
+      install: async (config: object, embedded: object, options?: object) => {
+        calls.push(`install ${JSON.stringify(config)} ${JSON.stringify(embedded)}${options ? ` ${JSON.stringify(options)}` : ""}`);
+        return { paths, fromSetup: false, url: "http://127.0.0.1:47820/", running: true, upgraded: false };
       },
-      uninstall: async () => {
-        calls.push("uninstall");
-        return { paths, deferred: true };
+      uninstall: async (options?: object) => {
+        calls.push(`uninstall${options ? ` ${JSON.stringify(options)}` : ""}`);
+        return { paths, deferred: true, viaSetup: false };
       },
       isRunning: async () => true,
       openUrl: (url: string) => calls.push(`open ${url}`),
@@ -209,7 +209,7 @@ describe("dafke-eid install / uninstall / test / dubbelklikken", () => {
 
   it("install meldt als het programma niet antwoordt", async () => {
     const { sys } = system({
-      install: async () => ({ paths, url: "http://127.0.0.1:47820/", running: false, upgraded: true }),
+      install: async () => ({ paths, fromSetup: false, url: "http://127.0.0.1:47820/", running: false, upgraded: true }),
     });
     const result = await runCli(["install"], { ...reader, system: sys }, {});
     expect(result.code).toBe(2);
@@ -237,6 +237,31 @@ describe("dafke-eid install / uninstall / test / dubbelklikken", () => {
     expect(result.stdout).toContain(`Logbestand: ${join(dir, "dafke-eid.log")}`);
     expect(result.stdout).toContain("Toegelaten websites: https://ingebakken.be");
     await result.server!.stop();
+  });
+
+  it("install --from-setup (vanuit de Windows-setup) geeft dat door", async () => {
+    const { sys, calls } = system();
+    const result = await runCli(["install", "--from-setup", "--silent", "--origin", "https://a.be"], { ...reader, system: sys }, {});
+    expect(result.code).toBe(0);
+    expect(calls).toEqual(['install {"origins":["https://a.be"]} {"origins":["https://ingebakken.be"]} {"fromSetup":true}']);
+  });
+
+  it("uninstall --keep-files laat de bestanden staan", async () => {
+    const { sys, calls } = system({
+      uninstall: async (options?: { keepFiles?: boolean }) => {
+        calls.push(`uninstall ${JSON.stringify(options)}`);
+        return { paths, deferred: false, viaSetup: false };
+      },
+    });
+    const result = await runCli(["uninstall", "--keep-files", "--silent"], { ...reader, system: sys }, {});
+    expect(calls).toEqual(['uninstall {"keepFiles":true}']);
+    expect(result.stdout).toContain("blijven staan");
+  });
+
+  it("uninstall van een setup-installatie gaat via het verwijderprogramma", async () => {
+    const { sys } = system({ uninstall: async () => ({ paths, deferred: true, viaSetup: true }) });
+    const result = await runCli(["uninstall"], { ...reader, system: sys }, {});
+    expect(result.stdout).toContain("verwijderprogramma van de setup");
   });
 
   it("uninstall", async () => {

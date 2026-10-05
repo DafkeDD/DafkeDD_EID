@@ -3,8 +3,9 @@
 # dan wordt er niets gereleased: verhoog eerst de versie op developer
 # met `npm run version:patch` (of :minor / :major).
 #
-# Bij de release horen het npm-pakket (.tgz) en het programma voor gebruikers:
-#   dafke-eid-windows-x64.exe, dafke-eid-macos-arm64, dafke-eid-macos-x64 (+ .sha256)
+# Bij de release horen het npm-pakket (.tgz) en het programma voor gebruikers (+ .sha256):
+#   dafke-eid-setup-windows-x64.exe (Windows-setup, Inno Setup), dafke-eid-windows-x64.exe (los),
+#   dafke-eid-macos-arm64, dafke-eid-macos-x64
 #
 # Ondertekenen gebeurt alleen als de geheimen ingesteld zijn (zie docs/releasen.md):
 #   Windows: WINDOWS_CERT_PFX (base64), WINDOWS_CERT_PASSWORD
@@ -87,8 +88,26 @@ jobs:
           $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String("${{ secrets.WINDOWS_CERT_PFX }}"))
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match "x64" } | Select-Object -Last 1
-          $exe = Get-ChildItem dist-bin -Filter "*.exe" | Select-Object -First 1
+          $exe = Get-Item dist-bin\dafke-eid-windows-x64.exe
           & $signtool.FullName sign /f $pfx /p "${{ secrets.WINDOWS_CERT_PASSWORD }}" /fd sha256 /tr http://timestamp.digicert.com /td sha256 $exe.FullName
+          Remove-Item $pfx
+
+      # Na het ondertekenen van het programma, zodat de setup het ondertekende programma bevat.
+      - name: Setup bouwen (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          npm run build:setup
+
+      - name: Setup ondertekenen (Windows)
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_CERT == 'true'
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String("${{ secrets.WINDOWS_CERT_PFX }}"))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match "x64" } | Select-Object -Last 1
+          & $signtool.FullName sign /f $pfx /p "${{ secrets.WINDOWS_CERT_PASSWORD }}" /fd sha256 /tr http://timestamp.digicert.com /td sha256 (Get-Item dist-bin\dafke-eid-setup-windows-x64.exe).FullName
           Remove-Item $pfx
 
       - name: Ondertekenen en notariseren (macOS)
@@ -110,11 +129,14 @@ jobs:
 
       - name: Controleren en checksum
         run: |
-          EXE=$(ls dist-bin/dafke-eid-* | grep -v sha256)
+          EXE=$(ls dist-bin/dafke-eid-* | grep -v sha256 | grep -v setup)
           "$EXE" --version
           "$EXE" read --mock > /dev/null
-          NAME=$(basename "$EXE")
-          (cd dist-bin && (sha256sum "$NAME" 2>/dev/null || shasum -a 256 "$NAME") > "$NAME.sha256")
+          cd dist-bin
+          for NAME in $(ls | grep -v '\.sha256$'); do
+            (sha256sum "$NAME" 2>/dev/null || shasum -a 256 "$NAME") > "$NAME.sha256"
+          done
+          ls -la
 
       - uses: actions/upload-artifact@v7
         with:

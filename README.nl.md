@@ -112,14 +112,25 @@ Dat controleert de handtekening over jouw origin en nonce, de keten tot Belgium 
 
 ## Programma voor gebruikers
 
-Downloaden uit de GitHub-release en dubbelklikken (Windows): het installeert zichzelf in het
-profiel van de gebruiker (geen administratorrechten), start mee met de computer en opent de
-**testpagina** op http://127.0.0.1:47820/ (status, lezers live, test lezen met gemaskeerde
-gegevens, diagnose, logboek).
+Downloadlinks (altijd de **nieuwste versie**, handig voor een downloadknop):
+
+| Platform | Link |
+| --- | --- |
+| Windows-setup (aanbevolen) | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-setup-windows-x64.exe |
+| Windows, los programma | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-windows-x64.exe |
+| macOS Apple Silicon | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-arm64 |
+| macOS Intel | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-x64 |
+
+Windows: download `dafke-eid-setup-windows-x64.exe` uit de GitHub-release en voer het uit (of het
+losse `dafke-eid-windows-x64.exe`, dat zichzelf installeert). Het installeert in het profiel van de
+gebruiker (geen administratorrechten), start mee met de computer en opent de **testpagina** op
+http://127.0.0.1:47820/ (status, lezers live, test lezen met gemaskeerde gegevens, diagnose,
+logboek). Stil: `/VERYSILENT /ORIGINS=https://app.x.be`.
 
 ```bash
 npm run build:exe                               # bouwt het programma voor dit platform
 npm run build:exe -- --origin https://app.x.be  # met ingebakken toegelaten websites
+npm run build:setup                             # Windows-setup (Inno Setup) rond het programma
 ```
 
 Zie [installeren.md](docs/installeren.md) (gebruikers), [uitrollen.md](docs/uitrollen.md) (IT) en

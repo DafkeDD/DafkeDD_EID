@@ -4,16 +4,36 @@ Websites die je eID lezen, hebben een klein programma op je computer nodig: **Da
 Het praat met je kaartlezer en geeft je kaart alleen aan websites die daarvoor toegelaten zijn.
 Je hebt geen administratorrechten nodig.
 
+## Downloaden
+
+Deze links wijzen altijd naar de **nieuwste versie** (handig voor een downloadknop op je website):
+
+| Platform | Bestand | Link |
+| --- | --- | --- |
+| Windows (aanbevolen) | Setup | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-setup-windows-x64.exe |
+| Windows | Los programma (installeert zichzelf) | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-windows-x64.exe |
+| macOS Apple Silicon (M1/M2/M3/…) | Programma | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-arm64 |
+| macOS Intel | Programma | https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-x64 |
+
+Alle versies, met `.sha256`-controlebestanden: https://github.com/DafkeDD/DafkeDD_EID/releases
+
 ## Windows
 
-1. Download `dafke-eid-windows-x64.exe`.
-2. Dubbelklik erop. Een venster meldt "DafkeDD eID geïnstalleerd" en de **testpagina** opent in je browser.
+1. Download **`dafke-eid-setup-windows-x64.exe`** (de setup).
+2. Dubbelklik erop. De setup installeert DafkeDD eID en start het meteen; vink **Testpagina openen**
+   aan om te zien of je kaartlezer werkt.
 3. Klaar. Het programma start voortaan vanzelf mee met Windows, zonder venster.
 
-Zolang het programma niet digitaal ondertekend is, toont Windows "Windows heeft uw pc beschermd".
+Je hebt geen administratorrechten nodig. Een nieuwe versie installeer je op dezelfde manier: je
+instellingen blijven bewaard.
+
+Zolang de setup niet digitaal ondertekend is, toont Windows "Windows heeft uw pc beschermd".
 Kies **Meer info → Toch uitvoeren**.
 
 Het staat daarna in **Instellingen → Apps → Geïnstalleerde apps** als "DafkeDD eID", met een knop **Verwijderen**.
+
+Liever zonder setup? Download `dafke-eid-windows-x64.exe` en dubbelklik erop: het programma
+installeert zichzelf op dezelfde plek, met hetzelfde resultaat.
 
 ## macOS
 
@@ -54,5 +74,5 @@ Support vraagt soms het **logbestand**: `%LOCALAPPDATA%\DafkeDD\eid\dafke-eid.lo
 
 ## Verwijderen
 
-- Windows: **Instellingen → Apps → DafkeDD eID → Verwijderen**.
+- Windows: **Instellingen → Apps → DafkeDD eID → Verwijderen** (geldt voor de setup én het losse programma).
 - Alle platformen: `dafke-eid uninstall` vanuit de installatiemap.

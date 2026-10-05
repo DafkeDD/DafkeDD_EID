@@ -30,6 +30,10 @@ export default function Page() {
 }
 ```
 
+Users install the program once: [Windows setup](https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-setup-windows-x64.exe),
+[macOS Apple Silicon](https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-arm64), [macOS Intel](https://github.com/DafkeDD/DafkeDD_EID/releases/latest/download/dafke-eid-macos-x64)
+(always the latest release).
+
 During development: `npx dafke-eid` (real reader) or `npx dafke-eid --mock` (virtual card),
 or `<EidProvider client={new MockEidClient()}>` from `@dafkedd/eid/mock` without any bridge.
 

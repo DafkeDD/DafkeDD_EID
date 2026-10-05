@@ -1,7 +1,7 @@
 {
   "name": "dafkedd-eid-monorepo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Belgian eID reading for hosted Next.js/React apps (DafkeDD_EID)",
   "workspaces": [
     "packages/*",
@@ -23,6 +23,7 @@
     "version:minor": "node scripts/bump-version.mjs minor",
     "version:major": "node scripts/bump-version.mjs major",
     "build:exe": "node scripts/build-exe.mjs",
+    "build:setup": "node scripts/build-setup.mjs",
     "fetch-roots": "node scripts/fetch-belgium-roots.mjs",
     "test-pki": "bash scripts/make-test-pki.sh"
   },

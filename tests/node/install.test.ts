@@ -9,6 +9,7 @@ import {
   macLaunchAgent,
   macWebloc,
   RUN_KEY,
+  SETUP_UNINSTALLER,
   UNINSTALL_KEY,
   uninstall,
   windowsLauncher,
@@ -106,12 +107,67 @@ describe("installeren op Windows", () => {
     const { deps, files, runs, spawned } = fakeDeps("win32");
     await install({}, deps);
     const paths = installPaths(deps);
-    const result = await uninstall({ ...deps, execPath: paths.exe });
+    const result = await uninstall({}, { ...deps, execPath: paths.exe });
     expect(result.deferred).toBe(true);
     expect(runs).toContainEqual(`reg delete ${RUN_KEY} /v DafkeDD eID /f`);
     expect(runs).toContainEqual(`reg delete ${UNINSTALL_KEY} /f`);
     expect(files.has(paths.shortcut)).toBe(false);
     expect(spawned.at(-1)).toContain(`rmdir /s /q "${paths.dir}"`);
+  });
+});
+
+describe("Windows-setup (Inno Setup)", () => {
+  it("install --from-setup schrijft geen eigen Apps-vermelding en ruimt een oude op", async () => {
+    const { deps, files, runs, spawned } = fakeDeps("win32");
+    const paths = installPaths(deps);
+    const result = await install({ fromSetup: true }, { ...deps, execPath: paths.exe });
+    expect(result.fromSetup).toBe(true);
+    expect(runs.some((r) => r.startsWith(`reg add ${UNINSTALL_KEY}`))).toBe(false);
+    expect(runs).toContainEqual(`reg delete ${UNINSTALL_KEY} /f`);
+    // Autostart, snelkoppeling en config doet het programma wel zelf.
+    expect(runs).toContainEqual(expect.stringContaining(`reg add ${RUN_KEY}`));
+    expect(files.has(paths.shortcut)).toBe(true);
+    expect(files.has(paths.config)).toBe(true);
+    expect(spawned).toEqual([`wscript.exe //E:jscript //B ${paths.autostart}`]);
+  });
+
+  it("herkent een setup-installatie aan unins000.exe, ook bij het losse programma", async () => {
+    const { deps, files, runs } = fakeDeps("win32");
+    const paths = installPaths(deps);
+    files.set(`${paths.dir}\\${SETUP_UNINSTALLER}`, "inno");
+    const result = await install({}, deps);
+    expect(result.fromSetup).toBe(true);
+    expect(runs.some((r) => r.startsWith(`reg add ${UNINSTALL_KEY}`))).toBe(false);
+  });
+
+  it("uninstall --keep-files laat de bestanden staan (de setup verwijdert ze)", async () => {
+    const { deps, files, runs, spawned } = fakeDeps("win32");
+    await install({}, deps);
+    const paths = installPaths(deps);
+    files.set(`${paths.dir}\\${SETUP_UNINSTALLER}`, "inno");
+    spawned.length = 0;
+    const result = await uninstall({ keepFiles: true }, { ...deps, execPath: paths.exe });
+    expect(result).toMatchObject({ deferred: false, viaSetup: false });
+    expect(runs).toContainEqual(`reg delete ${RUN_KEY} /v DafkeDD eID /f`);
+    expect(files.has(paths.shortcut)).toBe(false);
+    expect(files.has(paths.autostart)).toBe(false);
+    expect(files.has(paths.exe)).toBe(true);
+    expect(files.has(paths.config)).toBe(true);
+    expect(spawned).toEqual([]);
+  });
+
+  it("uninstall zonder --keep-files geeft door aan het verwijderprogramma van de setup", async () => {
+    const { deps, files, runs, spawned } = fakeDeps("win32");
+    await install({}, deps);
+    const paths = installPaths(deps);
+    files.set(`${paths.dir}\\${SETUP_UNINSTALLER}`, "inno");
+    runs.length = 0;
+    spawned.length = 0;
+    const result = await uninstall({}, deps);
+    expect(result.viaSetup).toBe(true);
+    expect(spawned).toEqual([`${paths.dir}\\${SETUP_UNINSTALLER} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`]);
+    expect(runs).toEqual([]);
+    expect(files.has(paths.exe)).toBe(true);
   });
 });
 
@@ -135,7 +191,7 @@ describe("installeren op macOS", () => {
     const { deps, files } = fakeDeps("darwin");
     await install({}, deps);
     const paths = installPaths(deps);
-    await uninstall(deps);
+    await uninstall({}, deps);
     expect(files.has(paths.autostart)).toBe(false);
     expect(files.has(paths.shortcut)).toBe(false);
     expect(files.has(paths.exe)).toBe(false);

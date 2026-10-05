@@ -50,6 +50,8 @@ Opties voor serve:
 Opties voor install / uninstall:
   --port, --origin, --auth-origin, --token, --no-testpage   Bewaard in config.json
   --silent              Geen browser openen, niet wachten (voor IT-uitrol)
+  --from-setup          (install, Windows) aangeroepen door de setup: geen eigen Apps-vermelding
+  --keep-files          (uninstall) bestanden laten staan; alleen autostart en snelkoppeling weg
 
 Opties voor read:
   --reader <naam>       Gebruik deze kaartlezer (standaard: de eerste met een kaart)
@@ -80,8 +82,8 @@ export interface SystemDeps {
   runningInstalled(): boolean;
   appDir(): string;
   embedded(): BridgeConfig;
-  install(config: BridgeConfig, embedded: BridgeConfig): Promise<InstallResult>;
-  uninstall(): Promise<UninstallResult>;
+  install(config: BridgeConfig, embedded: BridgeConfig, options?: { fromSetup?: boolean }): Promise<InstallResult>;
+  uninstall(options?: { keepFiles?: boolean }): Promise<UninstallResult>;
   isRunning(port: number): Promise<boolean>;
   openUrl(url: string): void;
 }
@@ -91,8 +93,8 @@ export const defaultSystem: SystemDeps = {
   runningInstalled: () => runningInstalled(),
   appDir: () => appDir(),
   embedded: embeddedConfig,
-  install: (config, embedded) => install({ config, embedded }),
-  uninstall: () => uninstall(),
+  install: (config, embedded, options) => install({ config, embedded, ...options }),
+  uninstall: (options) => uninstall(options),
   isRunning: (port) => defaultInstallDeps().isRunning(port),
   openUrl: (url) => openInBrowser(url),
 };
@@ -141,12 +143,14 @@ interface ParsedArgs {
   logFile: string | undefined;
   configFile: string | undefined;
   silent: boolean;
+  fromSetup: boolean;
+  keepFiles: boolean;
   version: boolean;
   help: boolean;
 }
 
 function parseArgs(argv: readonly string[]): ParsedArgs | string {
-  const args: ParsedArgs = { command: undefined, reader: undefined, full: false, json: false, photo: true, mock: false, debug: false, port: undefined, origins: [], authOrigins: [], token: undefined, testpage: undefined, logFile: undefined, configFile: undefined, silent: false, version: false, help: false };
+  const args: ParsedArgs = { command: undefined, reader: undefined, full: false, json: false, photo: true, mock: false, debug: false, port: undefined, origins: [], authOrigins: [], token: undefined, testpage: undefined, logFile: undefined, configFile: undefined, silent: false, fromSetup: false, keepFiles: false, version: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     switch (arg) {
@@ -178,6 +182,12 @@ function parseArgs(argv: readonly string[]): ParsedArgs | string {
         break;
       case "--silent":
         args.silent = true;
+        break;
+      case "--from-setup":
+        args.fromSetup = true;
+        break;
+      case "--keep-files":
+        args.keepFiles = true;
         break;
       case "--log-file":
       case "--config": {
@@ -356,7 +366,7 @@ async function serve(args: ParsedArgs, deps: CliDeps, env: Record<string, string
 async function installCommand(args: ParsedArgs, deps: CliDeps, interactive: boolean): Promise<CliResult> {
   const sys = systemOf(deps);
   try {
-    const result = await sys.install(configFromArgs(args), sys.embedded());
+    const result = await sys.install(configFromArgs(args), sys.embedded(), args.fromSetup ? { fromSetup: true } : undefined);
     let stdout =
       `${result.upgraded ? "DafkeDD eID bijgewerkt" : "DafkeDD eID geïnstalleerd"} (versie ${VERSION})\n` +
       `  Map:        ${result.paths.dir}\n` +
@@ -377,15 +387,16 @@ async function installCommand(args: ParsedArgs, deps: CliDeps, interactive: bool
   }
 }
 
-async function uninstallCommand(deps: CliDeps): Promise<CliResult> {
+async function uninstallCommand(args: ParsedArgs, deps: CliDeps): Promise<CliResult> {
   const sys = systemOf(deps);
   try {
-    const result = await sys.uninstall();
-    return {
-      code: 0,
-      stdout: `DafkeDD eID verwijderd uit ${result.paths.dir}${result.deferred ? " (de map verdwijnt binnen enkele seconden)" : ""}.\n`,
-      stderr: "",
-    };
+    const result = await sys.uninstall(args.keepFiles ? { keepFiles: true } : undefined);
+    const stdout = result.viaSetup
+      ? "DafkeDD eID wordt verwijderd via het verwijderprogramma van de setup.\n"
+      : args.keepFiles
+        ? `Autostart en snelkoppeling van DafkeDD eID verwijderd (bestanden in ${result.paths.dir} blijven staan).\n`
+        : `DafkeDD eID verwijderd uit ${result.paths.dir}${result.deferred ? " (de map verdwijnt binnen enkele seconden)" : ""}.\n`;
+    return { code: 0, stdout, stderr: "" };
   } catch (error) {
     return errorResult(error);
   }
@@ -425,7 +436,7 @@ export async function runCli(
   }
   if (args.command === "serve") return serve(args, deps, env);
   if (args.command === "install") return installCommand(args, deps, false);
-  if (args.command === "uninstall") return uninstallCommand(deps);
+  if (args.command === "uninstall") return uninstallCommand(args, deps);
   if (args.command === "test") return testCommand(args, deps, env);
 
   if (args.command === "diag") {

@@ -8,6 +8,10 @@
  * | macOS    | ~/Library/Application Support/DafkeDD/eid  | LaunchAgent ~/Library/LaunchAgents/be.dafkedd.eid.plist     | ~/Applications/DafkeDD eID testen.webloc         |
  * | Linux    | ~/.local/share/dafkedd/eid                 | systemd-gebruikersdienst dafkedd-eid.service                | ~/.local/share/applications/dafkedd-eid-testen.desktop |
  *
+ * Op Windows kan ook de setup (Inno Setup, `installer/dafke-eid.iss`) installeren. Die zet het
+ * programma in dezelfde map, roept `install --from-setup` aan en beheert zelf de Apps-vermelding
+ * (met `unins000.exe`). Het programma schrijft dan geen eigen Apps-vermelding, zodat er nooit twee staan.
+ *
  * Alles wat het systeem aanraakt gaat via `InstallDeps`, zodat het zonder echte installatie te testen is.
  */
 import { spawn, execFile } from "node:child_process";
@@ -25,6 +29,8 @@ export const UNINSTALL_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion
 export const LAUNCH_AGENT_LABEL = "be.dafkedd.eid";
 export const SYSTEMD_UNIT = "dafkedd-eid.service";
 export const SHORTCUT_NAME = "DafkeDD eID testen";
+/** Verwijderprogramma van de Windows-setup (Inno Setup) in de installatiemap. */
+export const SETUP_UNINSTALLER = "unins000.exe";
 
 export interface InstallPaths {
   dir: string;
@@ -220,10 +226,17 @@ export interface InstallOptions {
   config?: BridgeConfig;
   /** Ingebakken instellingen als basis bij een eerste installatie. */
   embedded?: BridgeConfig;
+  /**
+   * Windows: de setup beheert de installatie (Apps-vermelding, verwijderen). Standaard: ja als
+   * `unins000.exe` in de map staat.
+   */
+  fromSetup?: boolean;
 }
 
 export interface InstallResult {
   paths: InstallPaths;
+  /** Windows: geïnstalleerd via de setup. */
+  fromSetup: boolean;
   url: string;
   running: boolean;
   upgraded: boolean;
@@ -244,9 +257,15 @@ export async function stopRunning(deps: InstallDeps): Promise<void> {
   }
 }
 
+/** Staat de Windows-setup (Inno Setup) in de installatiemap? */
+export function hasSetupUninstaller(deps: Pick<InstallDeps, "platform" | "env" | "home" | "fs">): boolean {
+  return deps.platform === "win32" && deps.fs.exists(win32.join(installPaths(deps).dir, SETUP_UNINSTALLER));
+}
+
 export async function install(options: InstallOptions = {}, deps: InstallDeps = defaultInstallDeps()): Promise<InstallResult> {
   const paths = installPaths(deps);
   const upgraded = deps.fs.exists(paths.exe);
+  const fromSetup = deps.platform === "win32" && (options.fromSetup ?? hasSetupUninstaller(deps));
 
   // Instellingen: nieuw opgegeven > bestaande config.json > ingebakken.
   const existingText = upgraded ? deps.fs.readFile(paths.config) : undefined;
@@ -286,6 +305,10 @@ export async function install(options: InstallOptions = {}, deps: InstallDeps = 
     if (code !== 0) throw new EidError("internal", `Autostart registreren mislukt (reg.exe, code ${code})`);
     deps.fs.mkdir(win32.dirname(paths.shortcut));
     deps.fs.writeFile(paths.shortcut, windowsUrlShortcut(url));
+    if (fromSetup) {
+      // De setup heeft een eigen vermelding; een oude van het losse programma opruimen.
+      await deps.run("reg", ["delete", UNINSTALL_KEY, "/f"]);
+    } else {
     // Vermelding in Instellingen → Apps, met een knop Verwijderen.
     const values: Array<[string, string, string]> = [
       ["DisplayName", "REG_SZ", "DafkeDD eID"],
@@ -299,6 +322,7 @@ export async function install(options: InstallOptions = {}, deps: InstallDeps = 
       ["NoRepair", "REG_DWORD", "1"],
     ];
     for (const [name, type, data] of values) await deps.run("reg", ["add", UNINSTALL_KEY, "/v", name, "/t", type, "/d", data, "/f"]);
+    }
     deps.spawnDetached("wscript.exe", launcher);
   } else if (deps.platform === "darwin") {
     await deps.run("xattr", ["-d", "com.apple.quarantine", paths.exe]);
@@ -324,17 +348,35 @@ export async function install(options: InstallOptions = {}, deps: InstallDeps = 
     running = await deps.isRunning(resolved.port);
     if (!running) await deps.sleep(500);
   }
-  return { paths, url, running, upgraded };
+  return { paths, fromSetup, url, running, upgraded };
+}
+
+export interface UninstallOptions {
+  /**
+   * Alleen autostart, snelkoppeling en registersleutels weghalen; de bestanden laten staan.
+   * Zo roept de Windows-setup het aan: die verwijdert de map daarna zelf.
+   */
+  keepFiles?: boolean;
 }
 
 export interface UninstallResult {
   paths: InstallPaths;
   /** Windows: de map wordt pas na het afsluiten van dit programma verwijderd. */
   deferred: boolean;
+  /** Windows: doorgegeven aan het verwijderprogramma van de setup. */
+  viaSetup: boolean;
 }
 
-export async function uninstall(deps: InstallDeps = defaultInstallDeps()): Promise<UninstallResult> {
+export async function uninstall(options: UninstallOptions = {}, deps: InstallDeps = defaultInstallDeps()): Promise<UninstallResult> {
   const paths = installPaths(deps);
+
+  // Via de setup geïnstalleerd: het verwijderprogramma van de setup doet alles (ook de Apps-vermelding)
+  // en roept dit programma zelf aan met --keep-files.
+  if (!options.keepFiles && hasSetupUninstaller(deps)) {
+    deps.spawnDetached(win32.join(paths.dir, SETUP_UNINSTALLER), ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]);
+    return { paths, deferred: true, viaSetup: true };
+  }
+
   await stopRunning(deps);
   let deferred = false;
 
@@ -342,7 +384,9 @@ export async function uninstall(deps: InstallDeps = defaultInstallDeps()): Promi
     await deps.run("reg", ["delete", RUN_KEY, "/v", RUN_VALUE, "/f"]);
     await deps.run("reg", ["delete", UNINSTALL_KEY, "/f"]);
     deps.fs.rm(paths.shortcut);
-    if (samePath(deps.execPath, paths.exe, "win32")) {
+    if (options.keepFiles) {
+      deps.fs.rm(paths.autostart);
+    } else if (samePath(deps.execPath, paths.exe, "win32")) {
       // Een draaiend programma kan zichzelf niet verwijderen: even wachten en dan de map wissen.
       deps.spawnDetached("cmd.exe", ["/d", "/c", `ping 127.0.0.1 -n 3 > nul & rmdir /s /q "${paths.dir}"`]);
       deferred = true;
@@ -352,15 +396,15 @@ export async function uninstall(deps: InstallDeps = defaultInstallDeps()): Promi
   } else if (deps.platform === "darwin") {
     deps.fs.rm(paths.autostart);
     deps.fs.rm(paths.shortcut);
-    deps.fs.rm(paths.dir);
+    if (!options.keepFiles) deps.fs.rm(paths.dir);
   } else {
     await deps.run("systemctl", ["--user", "disable", "--now", SYSTEMD_UNIT]);
     deps.fs.rm(paths.autostart);
     await deps.run("systemctl", ["--user", "daemon-reload"]);
     deps.fs.rm(paths.shortcut);
-    deps.fs.rm(paths.dir);
+    if (!options.keepFiles) deps.fs.rm(paths.dir);
   }
-  return { paths, deferred };
+  return { paths, deferred, viaSetup: false };
 }
 
 /** Opent een adres in de standaardbrowser. */
