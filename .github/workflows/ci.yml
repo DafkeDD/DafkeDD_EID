@@ -20,6 +20,7 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -68,6 +69,7 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -130,6 +132,7 @@ jobs:
       # Echte installatie met de setup: stil, met instellingen, update, en verwijderen via unins000.exe.
       - name: Setup installeren, bijwerken en verwijderen (Windows)
         if: runner.os == 'Windows'
+        timeout-minutes: 10
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -140,9 +143,15 @@ jobs:
           $ownApps = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DafkeDD-eID"
           $shortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\DafkeDD eID testen.url"
           function Status { try { (Invoke-RestMethod http://127.0.0.1:47897/v1/status -TimeoutSec 2).name } catch { $null } }
+          # Niet Start-Process -Wait: dat wacht ook op alle kindprocessen, en de bridge blijft draaien.
+          function RunSetup([string[]]$arguments) {
+            $p = Start-Process $setup -ArgumentList $arguments -PassThru
+            if (-not $p.WaitForExit(180000)) { throw "setup hangt" }
+            if ($p.ExitCode -ne 0) { throw "setup gaf code $($p.ExitCode)" }
+          }
           function WaitRunning { for ($i = 0; $i -lt 30 -and (Status) -ne "dafke-eid"; $i++) { Start-Sleep 1 }; if ((Status) -ne "dafke-eid") { throw "het programma draait niet" } }
 
-          Start-Process $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/PORT=47897", "/ORIGINS=https://app.voorbeeld.be" -Wait
+          RunSetup @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/PORT=47897", "/ORIGINS=https://app.voorbeeld.be")
           WaitRunning
           if (-not (Test-Path "$dir\unins000.exe")) { throw "unins000.exe ontbreekt" }
           if (-not (Get-ItemProperty $run -Name "DafkeDD eID" -ErrorAction SilentlyContinue)) { throw "autostart ontbreekt" }
@@ -153,12 +162,13 @@ jobs:
           Write-Host "geïnstalleerd: $((Get-ItemProperty $apps).DisplayName) $((Get-ItemProperty $apps).DisplayVersion)"
 
           # Update: nog eens installeren zonder parameters houdt de instellingen.
-          Start-Process $setup -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait
+          RunSetup @("/VERYSILENT", "/SUPPRESSMSGBOXES")
           WaitRunning
           if (-not (Select-String -Path "$dir\config.json" -Pattern "app.voorbeeld.be" -Quiet)) { throw "instellingen verloren bij update" }
 
           # dafke-eid uninstall geeft door aan de setup; die verwijdert alles.
-          & "$dir\dafke-eid.exe" uninstall | Write-Host
+          $u = Start-Process "$dir\dafke-eid.exe" -ArgumentList "uninstall" -PassThru -NoNewWindow
+          if (-not $u.WaitForExit(60000)) { throw "uninstall hangt" }
           for ($i = 0; $i -lt 30 -and (Test-Path $dir); $i++) { Start-Sleep 1 }
           if (Test-Path $dir) { throw "map niet verwijderd" }
           if (Status) { throw "programma draait nog" }
@@ -183,6 +193,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
